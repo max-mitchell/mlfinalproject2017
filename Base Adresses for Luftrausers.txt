@@ -1,0 +1,11 @@
+ECX: 0A960260
+ECX Pointer: Luftrausers.exe+6ACA90
+ESI: 01E61440
+Total Score: ECX + 00000138
+Total Score Pointer: Luftrausers.exe+6ACA90 + 138
+Multiplier: ECX + 00000128
+Multiplier Pointer: Luftrausers.exe+6ACA90 + 128
+Not Death: ECX + 10
+Not Death Pointer: 0A960260 + 10
+
+Max Health: 1098907648

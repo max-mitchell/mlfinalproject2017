@@ -11,7 +11,7 @@
 
 extern "C" {
 	GETMEM_EXPORT void init(void);
-	GETMEM_EXPORT void readGameMem(DWORD *score);
+	GETMEM_EXPORT void readGameMem(int *score);
 	GETMEM_EXPORT void closeP(void);
 }
 

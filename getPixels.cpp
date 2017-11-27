@@ -29,6 +29,14 @@ extern "C" {
         return MAX_HEIGHT * MAX_WIDTH * 3;
     }
 
+    int getH() {
+        return MAX_HEIGHT;
+    }
+
+    int getW() {
+        return MAX_WIDTH;
+    }
+
     void getPix(BYTE *data) {
         HDC dc = GetDC(WINDOW);
         HDC dcTmp = CreateCompatibleDC(dc);
@@ -42,6 +50,7 @@ extern "C" {
         bitmap.bmiHeader.biPlanes = 1;
         bitmap.bmiHeader.biBitCount  = iBpi;
         bitmap.bmiHeader.biCompression = BI_RGB;
+
 
         HBITMAP hBitmap = CreateDIBSection(dcTmp, &bitmap, DIB_RGB_COLORS, (void**)&data, NULL, NULL);
         SelectObject(dcTmp, hBitmap);

@@ -13,11 +13,11 @@ using namespace std;
 extern "C" {
 
    DWORD PID = 0; 
-   DWORD STATIC_OFFSET = 0x6aca90; 
+   int STATIC_OFFSET = 0x6aca90; 
    int SCORE_OFFSET = 0x138;
    int MULT_OFFSET = 0x128;
 
-   DWORD BASE_ADDR = 0; 
+   BYTE *BASE_ADDR = 0; 
 
    HANDLE PROCESS;
 
@@ -37,19 +37,19 @@ extern "C" {
       ModuleEntry32.dwSize = sizeof(MODULEENTRY32); 
       Module32First(hSnapshot, &ModuleEntry32);
 
-      BASE_ADDR = (DWORD)ModuleEntry32.modBaseAddr;
+      BASE_ADDR = ModuleEntry32.modBaseAddr;
 
       CloseHandle(hSnapshot);
    }
 
-   void readGameMem(DWORD *rtrn) {
-      DWORD score;
-      DWORD mult;
-      DWORD mem; 
-      DWORD numBytesRead; 
-      ReadProcessMemory(PROCESS, (LPCVOID)(BASE_ADDR+STATIC_OFFSET), &mem, sizeof(DWORD), &numBytesRead); 
-      ReadProcessMemory(PROCESS, (LPCVOID)(mem+SCORE_OFFSET), &score, sizeof(DWORD), &numBytesRead); 
-      ReadProcessMemory(PROCESS, (LPCVOID)(mem+MULT_OFFSET), &mult, sizeof(DWORD), &numBytesRead); 
+   void readGameMem(int *rtrn) {
+      int score;
+      int mult;
+      int mem; 
+      SIZE_T numBytesRead; 
+      ReadProcessMemory(PROCESS, (LPCVOID)(BASE_ADDR+STATIC_OFFSET), &mem, sizeof(int), &numBytesRead); 
+      ReadProcessMemory(PROCESS, (LPCVOID)(mem+SCORE_OFFSET), &score, sizeof(int), &numBytesRead); 
+      ReadProcessMemory(PROCESS, (LPCVOID)(mem+MULT_OFFSET), &mult, sizeof(int), &numBytesRead); 
 
       rtrn[0] = score;
       rtrn[1] = mult;

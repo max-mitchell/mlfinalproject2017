@@ -1,7 +1,7 @@
 # ML Final Project
 ## Learning Luftrausers
 
-This program aims to learn the game Luftrausers using deep reinforcement learning.
+This program aims to learn the game Luftrausers (http://luftrausers.com/) using deep reinforcement learning.
 
 ***
 

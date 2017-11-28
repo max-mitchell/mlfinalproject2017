@@ -13,7 +13,7 @@ extern "C" {
 	GETPIX_EXPORT int init(void);
 	GETPIX_EXPORT int getH(void);
 	GETPIX_EXPORT int getW(void);
-	GETPIX_EXPORT void getPix(BYTE *data);
+	GETPIX_EXPORT BYTE *getPix(void);
 }
 
 #endif

@@ -4,35 +4,31 @@ import scipy.misc as smp
 import struct
 import PIL
 
+def printImg(plen, mh, mw):
+	pix_ptr = cast(getPix(), POINTER(c_char))
+	pixList = []
+	#print("Width:", mw, "Height:", mh, "Total:", plen)
+	for i in range(0, plen, 4):
+		#pixList.append([struct.unpack('B', pix_ptr[i])[0], struct.unpack('B', pix_ptr[i+1])[0], struct.unpack('B', pix_ptr[i+2])[0]])
+		pixList.append(int((0.3*struct.unpack('B', pix_ptr[i])[0]) + (0.59*struct.unpack('B', pix_ptr[i+1])[0]) + (0.11*struct.unpack('B', pix_ptr[i+2])[0])))
+	pixArr = np.array(pixList, dtype=np.int8).reshape((mh, mw))
+	#print(pixArr)
+	img = PIL.Image.fromarray(pixArr, mode="L")
+	img.show()
+
 ScoreArr = c_int32 * 2
 score = ScoreArr(0, 0)
 
 getMem = CDLL("getMem.dll")
-getPix = CDLL("getPixels.dll")
+getPixels = CDLL("getPixels.dll")
+getPix = getPixels.getPix
+getPix.restype = c_ulonglong
 getMem.init()
-pixLen = getPix.init()
-img_h = getPix.getH()
-img_w = getPix.getW()
+pixLen = getPixels.init()
+img_h = getPixels.getH()
+img_w = getPixels.getW()
 
-pixArr = c_char * pixLen
-pix = pixArr()
 
-getPix.getPix(byref(pix))
-
-pixList = []
-
-for h in range(img_h):
-	pixList.append([])
-	for w in range(img_w):
-		i = img_h*h+w
-		pixList[h].append(int((0.3*struct.unpack('B', pix[i])[0]) + (0.59*struct.unpack('B', pix[i+1])[0]) + (0.11*struct.unpack('B', pix[i+2])[0])))
-
-pixList = np.array(pixList)
-
-print(pixList)
-
-img = PIL.Image.fromarray(pixList, mode="L")
-img.show()
 
 oScore = c_int32()
 while True:
@@ -40,5 +36,6 @@ while True:
 	if oScore != score[0]:
 		print("Score:", score[0], "Mult:", score[1])
 		oScore = score[0]
+		printImg(pixLen, img_h, img_w)
 getMem.closeP()
 

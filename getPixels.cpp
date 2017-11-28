@@ -26,7 +26,7 @@ extern "C" {
         MAX_WIDTH = rect.right - rect.left;
         MAX_HEIGHT = rect.bottom - rect.top;
 
-        return MAX_HEIGHT * MAX_WIDTH * 3;
+        return MAX_HEIGHT * MAX_WIDTH * 4;
     }
 
     int getH() {
@@ -37,24 +37,24 @@ extern "C" {
         return MAX_WIDTH;
     }
 
-    void getPix(BYTE *data) {
+    BYTE *getPix() {
         HDC dc = GetDC(WINDOW);
         HDC dcTmp = CreateCompatibleDC(dc);
 
         int iBpi= GetDeviceCaps(dcTmp, BITSPIXEL);
-
         BITMAPINFO bitmap;
         bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
         bitmap.bmiHeader.biWidth = MAX_WIDTH;
-        bitmap.bmiHeader.biHeight = MAX_HEIGHT;
+        bitmap.bmiHeader.biHeight = -MAX_HEIGHT;
         bitmap.bmiHeader.biPlanes = 1;
         bitmap.bmiHeader.biBitCount  = iBpi;
         bitmap.bmiHeader.biCompression = BI_RGB;
 
-
+        BYTE *data;
         HBITMAP hBitmap = CreateDIBSection(dcTmp, &bitmap, DIB_RGB_COLORS, (void**)&data, NULL, NULL);
         SelectObject(dcTmp, hBitmap);
         BitBlt(dcTmp, 0, 0, MAX_WIDTH, MAX_HEIGHT, dc , 0, 0, SRCCOPY);
+        return data;
     }
 
     int main() {

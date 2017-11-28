@@ -59,9 +59,8 @@ def runConvNet(plen, mh, mw, lrt):
 	print(pi)
 
 
-getMem = CDLL("getMem.dll")
-getPixels = CDLL("getPixels.dll")
-getPix = getPixels.getPix
+luft_util = CDLL("luft_util.dll")
+getPix = luft_util.getPix
 getPix.restype = c_ulonglong
 
 ScoreArr = c_int32 * 2
@@ -69,12 +68,12 @@ score = ScoreArr(0, 0)
 
 l_rate = .0001
 
-getMem.init()
-pixLen = getPixels.init()
-img_h = getPixels.getH()
-img_w = getPixels.getW()
+luft_util.init()
+pixLen = luft_util.getPLen()
+img_h = luft_util.getH()
+img_w = luft_util.getW()
 
 runConvNet(pixLen, img_h, img_w, l_rate)
 
-getMem.closeP()
+getMem.closePMem()
 

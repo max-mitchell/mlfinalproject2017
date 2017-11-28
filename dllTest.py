@@ -19,23 +19,22 @@ def printImg(plen, mh, mw):
 ScoreArr = c_int32 * 2
 score = ScoreArr(0, 0)
 
-getMem = CDLL("getMem.dll")
-getPixels = CDLL("getPixels.dll")
-getPix = getPixels.getPix
+luft_util = CDLL("luft_util.dll")
+getPix = luft_util.getPix
 getPix.restype = c_ulonglong
-getMem.init()
-pixLen = getPixels.init()
-img_h = getPixels.getH()
-img_w = getPixels.getW()
+luft_util.init()
+pixLen = luft_util.getPLen()
+img_h = luft_util.getH()
+img_w = luft_util.getW()
 
 
 
 oScore = c_int32()
 while True:
-	getMem.readGameMem(byref(score))
+	luft_util.readGameMem(byref(score))
 	if oScore != score[0]:
 		print("Score:", score[0], "Mult:", score[1])
 		oScore = score[0]
 		printImg(pixLen, img_h, img_w)
-getMem.closeP()
+luft_util.closePMem()
 

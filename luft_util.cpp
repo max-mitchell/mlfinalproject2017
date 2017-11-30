@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <windows.h>
 #include <TlHelp32.h> 
@@ -15,6 +16,12 @@ extern "C" {
 
     HWND WINDOW;
     HANDLE PROCESS;
+
+    INPUT keybrd;
+    WORD FIRE_KEY = 0x58;
+    WORD LEFT_KEY = 0x41;
+    WORD UP_KEY = 0x57;
+    WORD RIGHT_KEY = 0x44;
 
     int MAX_WIDTH;
     int MAX_HEIGHT;
@@ -41,6 +48,10 @@ extern "C" {
       
         GetWindowThreadProcessId(WINDOW, &PID); 
         PROCESS = OpenProcess(PROCESS_ALL_ACCESS, FALSE, PID); 
+        if(PROCESS == 0 ){ 
+            printf("Process not found!\n"); 
+            exit(1);
+        } 
         HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, PID); 
         MODULEENTRY32 ModuleEntry32 = {0}; 
         ModuleEntry32.dwSize = sizeof(MODULEENTRY32); 
@@ -49,6 +60,10 @@ extern "C" {
         BASE_ADDR = ModuleEntry32.modBaseAddr;
 
         CloseHandle(hSnapshot);
+
+        keybrd.type = INPUT_KEYBOARD;
+        keybrd.ki.time = 0;
+        keybrd.ki.dwExtraInfo = 0;
     }
 
     int getPLen() {
@@ -76,10 +91,14 @@ extern "C" {
         bitmap.bmiHeader.biBitCount  = iBpi;
         bitmap.bmiHeader.biCompression = BI_RGB;
 
-        BYTE *data;
+        BYTE *data = NULL;
         HBITMAP hBitmap = CreateDIBSection(dcTmp, &bitmap, DIB_RGB_COLORS, (void**)&data, NULL, NULL);
         SelectObject(dcTmp, hBitmap);
         BitBlt(dcTmp, 0, 0, MAX_WIDTH, MAX_HEIGHT, dc , 0, 0, SRCCOPY);
+        if (data == NULL) {
+            printf("Get Pixels Error: %d\n", GetLastError());
+            exit(1);
+        }
         return data;
     }
 
@@ -94,6 +113,41 @@ extern "C" {
 
         rtrn[0] = score;
         rtrn[1] = mult;
+    }
+
+    void sendKey(int action) {
+        if (action < 4) {
+            keybrd.ki.dwFlags = KEYEVENTF_SCANCODE;
+            if (action == 0) {
+                keybrd.ki.wScan = MapVirtualKey(FIRE_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            } else if (action == 1) {
+                keybrd.ki.wScan = MapVirtualKey(LEFT_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            } else if (action == 2) {
+                keybrd.ki.wScan = MapVirtualKey(UP_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            } else if (action == 3) {
+                keybrd.ki.wScan = MapVirtualKey(RIGHT_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            }
+        } else {
+            keybrd.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+            if (action == 4) {
+                keybrd.ki.wScan = MapVirtualKey(FIRE_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            } else if (action == 5) {
+                keybrd.ki.wScan = MapVirtualKey(LEFT_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            } else if (action == 6) {
+                keybrd.ki.wScan = MapVirtualKey(UP_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            } else if (action == 7) {
+                keybrd.ki.wScan = MapVirtualKey(RIGHT_KEY, MAPVK_VK_TO_VSC);
+                SendInput(1, &keybrd, sizeof(INPUT));
+            }
+        }
+        printf("Sent key %d with error %d\n", action, GetLastError());
     }
 
     void closePMem() {

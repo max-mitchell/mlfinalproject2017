@@ -12,7 +12,7 @@ def getImgData(plen, mh, mw):
 		#pixList.append([struct.unpack('B', pix_ptr[i])[0], struct.unpack('B', pix_ptr[i+1])[0], struct.unpack('B', pix_ptr[i+2])[0]])
 		pixList.append(int((0.3*struct.unpack('B', pix_ptr[i])[0]) + (0.59*struct.unpack('B', pix_ptr[i+1])[0]) + (0.11*struct.unpack('B', pix_ptr[i+2])[0])))
 	
-	return pixList
+	return np.array(pixList).reshape([mw, mh, 1])
 
 def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN):
     conv_filterS = [filterS[0], filterS[1], channelN, filterN]
@@ -29,17 +29,15 @@ def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN):
 
 def runConvNet(plen, mh, mw, lrt):
 	pData = getImgData(plen, mh, mw)
-	x_init = tf.placeholder(tf.float32, [None, plen])
-	x = tf.reshape(x_init, [-1, mw, mh, 1])
-	y = tf.placeholder(tf.float32, [None, 8])
+	x = tf.placeholder(tf.float32, shape=[4, mw, mh, 1])
+	y = tf.placeholder(tf.float32, [8])
 
-	L1 = makeConvLayer(x, 1, 32, [8, 8], [2, 2], [4, 4])
-	L2 = makeConvLayer(L1, 32, 64, [4, 4], [2, 2], [3, 3])
-	L3 = makeConvLayer(L2, 64, 64, [3, 3], [2, 2], [1, 1])
+	L1 = makeConvLayer(x, 1, 32, [8, 8], [4, 4], [1, 1])
+	L2 = makeConvLayer(L1, 32, 64, [4, 4], [3, 3], [1, 1])
+	L3 = makeConvLayer(L2, 64, 64, [3, 3], [1, 1], [1, 1])
+	nlen = int(150528)
 
-	nlen = int(3*21*64)
-
-	L3_flat = tf.reshape(L3, [-1, nlen])
+	L3_flat = tf.reshape(L3, [1, nlen])
 
 	weight_d1 = tf.Variable(tf.truncated_normal([nlen, 512], stddev=0.03))
 	bias_d1 = tf.Variable(tf.truncated_normal([512], stddev=0.01))
@@ -57,8 +55,8 @@ def runConvNet(plen, mh, mw, lrt):
 	sess = tf.Session()
 	init = tf.global_variables_initializer().run(session=sess)
 
-	_, pi = sess.run([trainer, out_layer], feed_dict={y: [[0, 0, 0, 0, 0, 0, 1, 0]], x: [pData]})
-	print(pi)
+	_, pi = sess.run([trainer, out_layer], feed_dict={y: [0, 0, 0, 0, 0, 0, 1, 0], x: [pData, pData, pData, pData]})
+	print(pi[0])
 
 
 luft_util = CDLL("luft_util.dll")
@@ -77,5 +75,5 @@ img_w = luft_util.getW()
 
 runConvNet(pixLen, img_h, img_w, l_rate)
 
-getMem.closePMem()
+luft_util.closePMem()
 

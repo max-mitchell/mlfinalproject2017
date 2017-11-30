@@ -1,11 +1,5 @@
-all: mem pix
+all: util
 
-mem: getMem.cpp getMem.h
-	cl /LD getMem.cpp
+util: luft_util.cpp
+	cl /LD luft_util.cpp
 
-pix: getPixels.cpp getPixels.h
-	cl /LD getPixels.cpp
-
-test: getMemTest.cpp getPixelTest.cpp
-	cl getMemTest.cpp
-	cl getPixelTest.cpp

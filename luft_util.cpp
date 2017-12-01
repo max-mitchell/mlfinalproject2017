@@ -34,6 +34,8 @@ extern "C" {
 
     BYTE *BASE_ADDR = 0; 
 
+    int PIX_DEPTH = 4;
+
     void init() {
         WINDOW = FindWindowA(0, _T("LUFTRAUSERS")); 
         if(WINDOW == 0 ){ 
@@ -67,7 +69,7 @@ extern "C" {
     }
 
     int getPLen() {
-        return MAX_HEIGHT * MAX_WIDTH * 4;
+        return MAX_HEIGHT * MAX_WIDTH * PIX_DEPTH;
     }
 
     int getH() {
@@ -78,7 +80,7 @@ extern "C" {
         return MAX_WIDTH;
     }
 
-    BYTE *getPix() {
+    BYTE *getPix(int shrink) {
         HDC dc = GetDC(WINDOW);
         HDC dcTmp = CreateCompatibleDC(dc);
 
@@ -99,7 +101,22 @@ extern "C" {
             printf("Get Pixels Error: %d\n", GetLastError());
             exit(1);
         }
-        return data;
+
+        int nw = MAX_WIDTH/shrink;
+        int nh = MAX_HEIGHT/shrink;
+        BYTE *ndata = new BYTE[nw*nh];
+        int g = 0;
+        for (int i = 0; i < MAX_WIDTH*MAX_HEIGHT*PIX_DEPTH/shrink; i += PIX_DEPTH) {
+            if (g >= nw*nh) {
+                break;
+            }
+            ndata[g] = 0.3*data[i*shrink] + 0.59*data[i*shrink+1] + 0.11*data[i*shrink+2];
+            g++;
+            if ((i/PIX_DEPTH) % MAX_WIDTH == 0) {
+                i += MAX_WIDTH * PIX_DEPTH * (shrink - 1);
+            }
+        }
+        return ndata;
     }
 
     void readGameMem(int *rtrn) {
@@ -107,9 +124,18 @@ extern "C" {
         int mult;
         int mem; 
         SIZE_T numBytesRead; 
-        ReadProcessMemory(PROCESS, (LPCVOID)(BASE_ADDR+STATIC_OFFSET), &mem, sizeof(int), &numBytesRead); 
-        ReadProcessMemory(PROCESS, (LPCVOID)(mem+SCORE_OFFSET), &score, sizeof(int), &numBytesRead); 
-        ReadProcessMemory(PROCESS, (LPCVOID)(mem+MULT_OFFSET), &mult, sizeof(int), &numBytesRead); 
+        if (!ReadProcessMemory(PROCESS, (LPCVOID)(BASE_ADDR+STATIC_OFFSET), &mem, sizeof(int), &numBytesRead)) {
+            printf("Getting mem, error %d\n", GetLastError());
+            exit(1);
+        } 
+        if (!ReadProcessMemory(PROCESS, (LPCVOID)(mem+SCORE_OFFSET), &score, sizeof(int), &numBytesRead)) {
+            printf("Getting mem, error %d\n", GetLastError());
+            exit(1);
+        }
+        if (!ReadProcessMemory(PROCESS, (LPCVOID)(mem+MULT_OFFSET), &mult, sizeof(int), &numBytesRead)) {
+            printf("Getting mem, error %d\n", GetLastError());
+            exit(1);
+        }
 
         rtrn[0] = score;
         rtrn[1] = mult;

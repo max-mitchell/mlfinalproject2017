@@ -13,19 +13,21 @@ RIGHT_KEY = 3
 DEAD = 81
 
 def printImg(plen, mh, mw):
-	pix_ptr = cast(getPix(), POINTER(c_char))
+	shrink = 2
+	nh = int(mh/shrink)
+	nw = int(mw/shrink)
+	pix_ptr = cast(getPix(shrink), POINTER(c_char))
 	pixList = []
-	#print("Width:", mw, "Height:", mh, "Total:", plen)
-	for i in range(0, plen, 4):
-		#pixList.append([struct.unpack('B', pix_ptr[i])[0], struct.unpack('B', pix_ptr[i+1])[0], struct.unpack('B', pix_ptr[i+2])[0]])
-		pixList.append(int((0.3*struct.unpack('B', pix_ptr[i])[0]) + (0.59*struct.unpack('B', pix_ptr[i+1])[0]) + (0.11*struct.unpack('B', pix_ptr[i+2])[0])))
-	#pixArr = np.array(pixList, dtype=np.int8).reshape((mh, mw))
-	#print(pixArr)
+	for i in range(nh*nw):
+		pixList.append(struct.unpack('B', pix_ptr[i])[0])
+	#pixArr = np.array(pixList, dtype=np.int8).reshape(nh, nw)
+	
 	#img = PIL.Image.fromarray(pixArr, mode="L")
 	#img.show()
 
+	#print(pixList[20000:20010])
 	isDead = True
-	for i in pixList[20000:20100]:
+	for i in pixList[30000:30100]:
 		if i != DEAD:
 			isDead = False
 
@@ -42,17 +44,29 @@ pixLen = luft_util.getPLen()
 img_h = luft_util.getH()
 img_w = luft_util.getW()
 
+
+printImg(pixLen, img_h, img_w)
+
+
 time.sleep(5)
-luft_util.sendKey(FIRE_KEY)
 
 oScore = c_int32()
 oDead = False
-nGame = False
+nGame = True
 while True:
 	dd = printImg(pixLen, img_h, img_w)
 	luft_util.readGameMem(byref(score))
 	if oScore != score[0]:
-		print("Score:", score[0], "Mult:", score[1])
+		if nGame and score[0] != 0:
+			nGame = False
+		if nGame and score[0] == 0:
+			luft_util.sendKey(UP_KEY)
+			time.sleep(.1)
+			luft_util.sendKey(UP_KEY+4)
+			luft_util.sendKey(FIRE_KEY)
+		if score[0] == 0 and not nGame:
+			luft_util.sendKey(FIRE_KEY+4)
+		print("Score:", score[0], "Mult:", score[1], "Error:", GetLastError())
 		oScore = score[0]
 		if oDead == True:
 			oDead = False
@@ -61,10 +75,10 @@ while True:
 	if dd != oDead:
 		print("You died!")
 		luft_util.sendKey(UP_KEY)
-		luft_util.sendKey(UP_KEY+4)
-		luft_util.sendKey(UP_KEY)
+		time.sleep(.1)
 		luft_util.sendKey(UP_KEY+4)
 		oDead = dd
+		nGame == True
 		
 luft_util.closePMem()
 

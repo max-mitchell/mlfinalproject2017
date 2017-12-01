@@ -4,21 +4,38 @@ import scipy.misc as smp
 import struct
 import tensorflow as tf
 
-def getImgData(plen, mh, mw):
-	pix_ptr = cast(getPix(), POINTER(c_char))
+SHRINK = 2
+DEAD = 81
+
+D_TABLE = []
+
+def getImgData(plen, nw, nh):
+	pix_ptr = cast(getPix(SHRINK), POINTER(c_char))
 	pixList = []
-	#print("Width:", mw, "Height:", mh, "Total:", plen)
-	for i in range(0, plen, 4):
-		#pixList.append([struct.unpack('B', pix_ptr[i])[0], struct.unpack('B', pix_ptr[i+1])[0], struct.unpack('B', pix_ptr[i+2])[0]])
-		pixList.append(int((0.3*struct.unpack('B', pix_ptr[i])[0]) + (0.59*struct.unpack('B', pix_ptr[i+1])[0]) + (0.11*struct.unpack('B', pix_ptr[i+2])[0])))
-	
-	return np.array(pixList).reshape([mw, mh, 1])
+	for i in range(nh*nw):
+		pixList.append(struct.unpack('B', pix_ptr[i])[0])
+
+	isDead = True
+	for i in pixList[30000:30100]:
+		if i != DEAD:
+			isDead = False
+
+	return np.array(pixList).reshape([nw, nh, 1])
+
+def filld(plen, nw, nh):
+	for i in range(32):
+		e = [[], i%8, 1, []]
+		for j in range(4):
+			e[0].append(getImgData(plen, nw, nh))
+		e[3] = e[0][1:]
+		e[3].append(getImgData(plen, nw, nh))
+		D_TABLE.append(e)
 
 def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN):
     conv_filterS = [filterS[0], filterS[1], channelN, filterN]
     weights = tf.Variable(tf.truncated_normal(conv_filterS, stddev=0.03))
     bias = tf.Variable(tf.truncated_normal([filterN]))
-    out_layer = tf.nn.conv2d(pData, weights, [strideN[0], strideN[1], 1, 1], padding='SAME')
+    out_layer = tf.nn.conv2d(pData, weights, [1, strideN[0], strideN[1], 1], padding='SAME')
     out_layer += bias
     out_layer = tf.nn.relu(out_layer)
     ksize = [1, poolS[0], poolS[1], 1]
@@ -27,15 +44,15 @@ def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN):
 
     return out_layer
 
-def runConvNet(plen, mh, mw, lrt):
-	pData = getImgData(plen, mh, mw)
-	x = tf.placeholder(tf.float32, shape=[4, mw, mh, 1])
+def trainCNN(pdata, npdata, nw, nh, lrt):
+	
+	x = tf.placeholder(tf.float32, shape=[4, nw, nh, 1])
 	y = tf.placeholder(tf.float32, [8])
 
-	L1 = makeConvLayer(x, 1, 32, [8, 8], [4, 4], [1, 1])
-	L2 = makeConvLayer(L1, 32, 64, [4, 4], [3, 3], [1, 1])
+	L1 = makeConvLayer(x, 1, 32, [8, 8], [1, 1], [4, 4])
+	L2 = makeConvLayer(L1, 32, 64, [4, 4], [1, 1], [3, 3])
 	L3 = makeConvLayer(L2, 64, 64, [3, 3], [1, 1], [1, 1])
-	nlen = int(150528)
+	nlen = int(3072)
 
 	L3_flat = tf.reshape(L3, [1, nlen])
 
@@ -55,8 +72,22 @@ def runConvNet(plen, mh, mw, lrt):
 	sess = tf.Session()
 	init = tf.global_variables_initializer().run(session=sess)
 
-	_, pi = sess.run([trainer, out_layer], feed_dict={y: [0, 0, 0, 0, 0, 0, 1, 0], x: [pData, pData, pData, pData]})
+	for i in range(16):
+		_, pi = sess.run([trainer, out_layer], feed_dict={y: [0, 0, 0, 0, 0, 0, 1, 0], x: pdata})
 	print(pi[0])
+
+def runConvNet(plen, nw, nh, lrt):
+	filld(plen, nw, nh)
+	e = [[], 0, 0, []]
+	pdata = []
+	npdata = []
+	for i in range(4):
+		pdata.append(getImgData(plen, nw, nh))
+	npdata = pdata[1:]
+	npdata.append(getImgData(plen, nw, nh))
+	e[0] = pdata
+	e[3] = npdata
+	trainCNN(pdata, npdata, nw, nh, lrt)
 
 
 luft_util = CDLL("luft_util.dll")
@@ -72,8 +103,10 @@ luft_util.init()
 pixLen = luft_util.getPLen()
 img_h = luft_util.getH()
 img_w = luft_util.getW()
+nimg_h = int(img_h/SHRINK)
+nimg_w = int(img_w/SHRINK)
 
-runConvNet(pixLen, img_h, img_w, l_rate)
+runConvNet(pixLen, nimg_w, nimg_h, l_rate)
 
 luft_util.closePMem()
 

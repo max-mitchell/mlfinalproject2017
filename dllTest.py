@@ -17,10 +17,10 @@ def printImg(plen, mh, mw):
 	nh = int(mh/shrink)
 	nw = int(mw/shrink)
 	pix_ptr = cast(getPix(shrink), POINTER(c_char))
-	pixList = []
+	pixList = np.zeros((nh*nw), dtype=np.int8)
 	for i in range(nh*nw):
-		pixList.append(struct.unpack('B', pix_ptr[i])[0])
-	#pixArr = np.array(pixList, dtype=np.int8).reshape(nh, nw)
+		pixList[i] = struct.unpack('B', pix_ptr[i])[0]
+	#pixArr = pixList.reshape(nh, nw)
 	
 	#img = PIL.Image.fromarray(pixArr, mode="L")
 	#img.show()

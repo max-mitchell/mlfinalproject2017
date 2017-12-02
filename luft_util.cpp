@@ -68,6 +68,14 @@ extern "C" {
         keybrd.ki.dwExtraInfo = 0;
     }
 
+    void reset() {
+        WINDOW = FindWindowA(0, _T("LUFTRAUSERS")); 
+        if(WINDOW == 0 ){ 
+            printf("Window not found!\n"); 
+            exit(1);
+        } 
+    }
+
     int getPLen() {
         return MAX_HEIGHT * MAX_WIDTH * PIX_DEPTH;
     }
@@ -92,6 +100,7 @@ extern "C" {
         bitmap.bmiHeader.biPlanes = 1;
         bitmap.bmiHeader.biBitCount  = iBpi;
         bitmap.bmiHeader.biCompression = BI_RGB;
+
 
         BYTE *data = NULL;
         HBITMAP hBitmap = CreateDIBSection(dcTmp, &bitmap, DIB_RGB_COLORS, (void**)&data, NULL, NULL);
@@ -173,7 +182,7 @@ extern "C" {
                 SendInput(1, &keybrd, sizeof(INPUT));
             }
         }
-        printf("Sent key %d with error %d\n", action, GetLastError());
+        //printf("Sent key %d with error %d\n", action, GetLastError());
     }
 
     void closePMem() {

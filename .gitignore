@@ -4,3 +4,5 @@
 *.exp
 *.obj
 *.npy
+*.ilk
+*.pdb

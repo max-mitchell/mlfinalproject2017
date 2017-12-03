@@ -11,7 +11,6 @@
 
 extern "C" {
 	LUFTUTIL_EXPORT void init(void);
-	LUFTUTIL_EXPORT void reset(void);
 	LUFTUTIL_EXPORT int getPLen(void);
 	LUFTUTIL_EXPORT int getH(void);
 	LUFTUTIL_EXPORT int getW(void);

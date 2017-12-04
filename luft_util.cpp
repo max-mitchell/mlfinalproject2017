@@ -36,7 +36,6 @@ extern "C" { //means it's good for any version of c
     int PIX_DEPTH = 4; //4 becuase Luftrausers uses RGBA coloring
 
     BYTE *NDATA; //array to hold processed pixel values
-    HBITMAP hBitmap; //hbitmap struct
 
     void init() { //init function
         WINDOW = FindWindowA(0, _T("LUFTRAUSERS")); //get window handle
@@ -85,7 +84,7 @@ extern "C" { //means it's good for any version of c
     BYTE *getPix(int shrink) { //get pixels from Luftrausers screen
         HDC dc = GetDC(WINDOW); //get dc object
         HDC dcTmp = CreateCompatibleDC(dc); //not sure what this line does
-        ReleaseDC(WINDOW, dc); //free dc
+        
 
         int iBpi= GetDeviceCaps(dcTmp, BITSPIXEL); //get pixel depth, I hardcoded in a 4 but really I shouldn't have
         BITMAPINFO bitmap;
@@ -98,16 +97,14 @@ extern "C" { //means it's good for any version of c
 
 
         BYTE *data = NULL;
-        hBitmap = CreateDIBSection(dcTmp, &bitmap, DIB_RGB_COLORS, (void**)&data, NULL, NULL); //set up pixel capture
-        SelectObject(dcTmp, hBitmap);
+        HBITMAP hBitmap = CreateDIBSection(dcTmp, &bitmap, DIB_RGB_COLORS, (void**)&data, NULL, NULL); //set up pixel capture
+        HGDIOBJ pbitmap = SelectObject(dcTmp, hBitmap);
         BitBlt(dcTmp, 0, 0, MAX_WIDTH, MAX_HEIGHT, dc , 0, 0, SRCCOPY); //get pixel data
         if (data == NULL) {
             printf("Get Pixels Error: %d\n", GetLastError());
             exit(1);
         }
-
-        DeleteDC(dcTmp);
-        
+  
         int nw = MAX_WIDTH/shrink;
         int nh = MAX_HEIGHT/shrink;
         NDATA = new BYTE[nw*nh]; //set up new pixel array
@@ -122,6 +119,11 @@ extern "C" { //means it's good for any version of c
                 i += MAX_WIDTH * PIX_DEPTH * (shrink - 1);
             }
         }
+        ReleaseDC(WINDOW, dc); //free dc
+        SelectObject(dcTmp, pbitmap);
+        DeleteDC(dcTmp);
+        DeleteObject(pbitmap);
+        DeleteObject(hBitmap);
         return NDATA;
     }
 

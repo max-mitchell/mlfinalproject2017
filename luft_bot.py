@@ -10,9 +10,9 @@ SHRINK = 2 #how much to shrink the image cap
 DEAD_VAL = 81 #screen color when dead
 IS_DEAD = False #if AI is dead
 DLEN = 500000 #d_table len
-OLD_D = DLEN - 1 #spot to replace when adding event to d_table
+OLD_D = 0 #spot to replace when adding event to d_table
 
-makeDTable = True #IMPORTANT whether or not to create new d_table
+makeDTable = False #IMPORTANT whether or not to create new d_table
 
 dtmp = [[[], 0, 0, []]] * DLEN #d_table structure, each e is 
 	#[0] a list of screens, 
@@ -34,7 +34,6 @@ def getImgData(plen, nw, nh): #gets pixel data from luft_util
 		pixList[i] = struct.unpack('B', pix_ptr[i])[0]
 
 	IS_DEAD = True
-	print(pixList[30000:30100])
 	for i in pixList[30000:30100]: #check if screen is dead screen
 		if i != DEAD_VAL:
 			IS_DEAD = False
@@ -54,10 +53,7 @@ def newGame(rand): #performs new games actions
 	global IS_DEAD
 	for i in range(4, 8):
 		luft_util.sendKey(i)
-	if not rand:
-		time.sleep(2)
-	else: #if making d_table, wait a little longer just in case it's saving at that time
-		time.sleep(8)
+	time.sleep(2)
 	luft_util.sendKey(2)
 	time.sleep(.1)
 	luft_util.sendKey(6)
@@ -66,7 +62,7 @@ def newGame(rand): #performs new games actions
 	time.sleep(.1)
 	luft_util.sendKey(6)
 	IS_DEAD = False
-	print("im dead!!!!!! ahh it burns!!!") 
+	#print("im dead!!!!!! ahh it burns!!!") 
 
 def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv layer
     conv_filterS = [filterS[0], filterS[1], channelN, filterN] #set up filter to scan image with
@@ -80,6 +76,48 @@ def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv
     out_layer = tf.nn.max_pool(out_layer, ksize=ksize, strides=strides, padding='SAME') #finish conv layer with pool
 
     return out_layer
+
+def concatDTable(): #load d_table from a file and set OLD_D to end of file
+	global OLD_D
+	global D_TABLE
+	tmp = np.load("d_table.npy")
+	c = 0
+	ce = 0
+	for e in tmp:
+		c += 1
+		if e[0] != []:
+			ce += 1
+			D_TABLE[OLD_D][0] = e[0]
+			D_TABLE[OLD_D][1] = e[1]
+			D_TABLE[OLD_D][2] = e[2]
+			D_TABLE[OLD_D][3] = e[3]
+			OLD_D = (OLD_D + 1) % DLEN
+	print("Loaded npy file with spot:", OLD_D, "went through:", c, "good events:", ce)
+
+def shrinkDTable():
+	global DLEN
+	global D_TABLE
+	global OLD_D
+	tmp_l = np.load("d_table.npy")
+	c = 0
+	for e in tmp_l:
+		if e[0] != []:
+			c += 1
+	DLEN = c
+	tmp = [[[], 0, 0, []]] * DLEN
+	tmp_t = np.array(tmp)
+	c = 0
+	for e in tmp_l:
+		if e[0] != []:
+			#print(e[0])
+			tmp_t[c][0] = e[0]
+			tmp_t[c][1] = e[1]
+			tmp_t[c][2] = e[2]
+			tmp_t[c][3] = e[3]
+			c = (c + 1) % DLEN
+	OLD_D = DLEN - 1
+	D_TABLE = tmp_t
+	print("new dlen:", DLEN)
 
 def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	global OLD_D
@@ -116,18 +154,28 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	init = tf.global_variables_initializer().run(session=sess)
 
 	cdir = os.path.dirname(os.path.realpath(__file__))
-	saver.restore(sess, cdir+"\luft.ckpt") #one time load of previous net
+	#saver.restore(sess, cdir+"\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
-	if not rand:
-		D_TABLE = np.load("d_table.npy") #if we're not making a new d_table, load the old one
+	if rand:
+		print("Making new random events")
+		concatDTable() #if we're not making a new d_table, load the old one
+	else:
+		print("Getting ready to train")
+		shrinkDTable() #else, load it and find dlen
+
+	luft_util.sendKey(2) #start first game
+	time.sleep(.1)
+	luft_util.sendKey(6)
+	time.sleep(.2)
 	
-	for i in range(1000001): #LEARN THE GAME FOR A WHILE
+	print("Starting loop")
+	for i in range(5001): #LEARN THE GAME FOR A WHILE
 		print("Step:", i, end="\r")
 
-		if not rand: #if not making a new d_table, train
+		if not rand: #if not making a new d_tablwxe, train
 
-			if i % 200 == 0: #save net every 200 steps
+			if i % 200 == 0 and i != 0: #save net every 200 steps
 				saver.save(sess, cdir+"\luft.ckpt")
 				print("Saved net on step", i)
 
@@ -141,7 +189,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				m[e[2]] = 1 #make a mask of 0s except a 1 where the max of pInit was
 				sess.run(trainer, feed_dict={x: e[3], rt: [e[1]], mask: m, oPred: qsa}) #finish training and update the weights
 
-		elif i % 500 == 0 and i != 0: #if making a new d_table, save the d_table every 500 steps
+		elif i % 1000 == 0 and i != 0: #if making a new d_table, save the d_table every 500 steps
 			np.save("d_table.npy", D_TABLE)
 			print("Saved d_table on step", i)
 
@@ -167,11 +215,12 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				en[1] = SCORE[0]
 				en[2] = ksend
 
-				D_TABLE[OLD_D][0] = en[0]
-				D_TABLE[OLD_D][1] = en[1]
-				D_TABLE[OLD_D][2] = en[2]
-				D_TABLE[OLD_D][3] = en[3]
-				OLD_D = (OLD_D - 1) % DLEN #change old_d
+				if en[0] != []:
+					D_TABLE[OLD_D][0] = en[0]
+					D_TABLE[OLD_D][1] = en[1]
+					D_TABLE[OLD_D][2] = en[2]
+					D_TABLE[OLD_D][3] = en[3]
+					OLD_D = (OLD_D + 1) % DLEN #change old_d
 		else:
 			newGame(rand)
 
@@ -194,10 +243,7 @@ img_w = luft_util.getW()
 nimg_h = int(img_h/SHRINK) #adjust data
 nimg_w = int(img_w/SHRINK)
 
-luft_util.sendKey(2) #start first game
-time.sleep(.1)
-luft_util.sendKey(6)
-time.sleep(.2)
+
 
 runConvNet(pixLen, nimg_w, nimg_h, l_rate, makeDTable) #start training
 

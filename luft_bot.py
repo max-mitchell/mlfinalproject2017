@@ -34,6 +34,7 @@ def getImgData(plen, nw, nh): #gets pixel data from luft_util
 		pixList[i] = struct.unpack('B', pix_ptr[i])[0]
 
 	IS_DEAD = True
+	print(pixList[30000:30100])
 	for i in pixList[30000:30100]: #check if screen is dead screen
 		if i != DEAD_VAL:
 			IS_DEAD = False
@@ -65,6 +66,7 @@ def newGame(rand): #performs new games actions
 	time.sleep(.1)
 	luft_util.sendKey(6)
 	IS_DEAD = False
+	print("im dead!!!!!! ahh it burns!!!") 
 
 def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv layer
     conv_filterS = [filterS[0], filterS[1], channelN, filterN] #set up filter to scan image with

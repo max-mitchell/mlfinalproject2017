@@ -20,10 +20,10 @@ def printImg(plen, mh, mw):
 	pixList = np.zeros((nh*nw), dtype=np.int8)
 	for i in range(nh*nw):
 		pixList[i] = struct.unpack('B', pix_ptr[i])[0]
-	#pixArr = pixList.reshape(nh, nw)
+	pixArr = pixList.reshape(nh, nw)
 	
-	#img = PIL.Image.fromarray(pixArr, mode="L")
-	#img.show()
+	img = PIL.Image.fromarray(pixArr, mode="L")
+	img.show()
 
 	#print(pixList[20000:20010])
 	isDead = True

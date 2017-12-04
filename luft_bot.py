@@ -12,7 +12,7 @@ IS_DEAD = False #if AI is dead
 DLEN = 500000 #d_table len
 OLD_D = 0 #spot to replace when adding event to d_table
 
-makeDTable = False #IMPORTANT whether or not to create new d_table
+makeDTable = True #IMPORTANT whether or not to create new d_table
 
 dtmp = [[[], 0, 0, []]] * DLEN #d_table structure, each e is 
 	#[0] a list of screens, 
@@ -80,7 +80,7 @@ def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv
 def concatDTable(): #load d_table from a file and set OLD_D to end of file
 	global OLD_D
 	global D_TABLE
-	tmp = np.load("d_table.npy")
+	tmp = np.load("d_table.npz")['dt']
 	c = 0
 	ce = 0
 	for e in tmp:
@@ -98,7 +98,7 @@ def shrinkDTable():
 	global DLEN
 	global D_TABLE
 	global OLD_D
-	tmp_l = np.load("d_table.npy")
+	tmp_l = np.load("d_table.npz")['dt']
 	c = 0
 	for e in tmp_l:
 		if e[0] != []:
@@ -189,8 +189,8 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				m[e[2]] = 1 #make a mask of 0s except a 1 where the max of pInit was
 				sess.run(trainer, feed_dict={x: e[3], rt: [e[1]], mask: m, oPred: qsa}) #finish training and update the weights
 
-		elif i % 1000 == 0 and i != 0: #if making a new d_table, save the d_table every 500 steps
-			np.save("d_table.npy", D_TABLE)
+		elif i % 500 == 0 and i != 0: #if making a new d_table, save the d_table every 500 steps
+			np.savez_compressed("d_table.npz", dt=D_TABLE)
 			print("Saved d_table on step", i)
 
 		en = [[], 0, 0, []] #after training, make a new event
@@ -227,7 +227,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 
 		
 
-	np.save("d_table.npy", D_TABLE) #save net and d_table
+	#np.save("d_table.npy", D_TABLE) #save net and d_table
 	saver.save(sess, cdir+"\luft.ckpt")
 
 

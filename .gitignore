@@ -3,6 +3,7 @@
 *.lib
 *.exp
 *.obj
+*.npz
 *.npy
 *.ilk
 *.pdb

@@ -26,7 +26,7 @@ l_rate = .00001 #learning rate
 
 doRMove = .01
 
-keyCode = ["Fire  ON", "Left  ON", "Up  ON", "Right  ON", "Fire Off", "Left Off", "Up Off", "Right Off"]
+keyCode = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
 def getImgData(plen, nw, nh, plist, pspot): #gets pixel data from luft_util
 	global IS_DEAD
@@ -118,7 +118,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	init = tf.global_variables_initializer().run(session=sess)
 
 	cdir = os.path.dirname(os.path.realpath(__file__))
-	#saver.restore(sess, cdir+"\luft.ckpt") #one time load of previous net
+	saver.restore(sess, cdir+"\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
 	#print(D_TABLE_sinit[0][0], "***")
@@ -132,6 +132,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	
 	print("Starting loop")
 	timeAlive = time.perf_counter()
+	lkey = -1
 	for i in range(75000+1): #LEARN THE GAME FOR A WHILE
 		print("Step:", i, end="\r")
 
@@ -171,29 +172,36 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 			if not rand: #not making d_table, set normally
 				if random.random() > doRMove:
 					ksend = pf.argmax()
-					print(pf[ksend], keyCode[ksend])
-					if pf[ksend] != 0:
+					if pf[ksend] != 0 and ksend != lkey:
 						luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
+						lkey = ksend
 				else:
 					ksend = random.randint(0, 7)
-					luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
+					if ksend != lkey:
+						luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
+						lkey = ksend
 					if doRMove > .0000001:
 						doRMove -= .0000001
 			else: #else, set randomly
 				ksend = random.randint(0, 7)
-				luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
+				if ksend != lkey:
+					luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
+					lkey = ksend
 
 			luft_util.readGameMem(byref(SCORE)) #read score
 			getImgData(plen, nw, nh, en_snext, 0)
 			en_snext = np.reshape(en_snext, (nw, nh, 4))
 			if IS_DEAD: #if AI died, don't add new event
+				timeAlive = time.perf_counter()
+				lkey = -1
 				for k in range(5):
 					D_TABLE_r[(DSPOT - k) % DLEN] = 0
 				newGame(rand)
 			else: #else, add event to spot DSPOT in d_table
-				nscore = SCORE[0] + (timeAlive * 100 - 200)
+				nscore = SCORE[0] - int(1/((time.perf_counter()-timeAlive) / 1000.0))
 				if nscore < 0:
 					nscore = 0
+				print(pf[ksend], keyCode[ksend], "Score:", nscore)
 				en_r = nscore
 				en_a = ksend
 				np.copyto(D_TABLE_sinit[DSPOT], en_sinit)
@@ -210,6 +218,8 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				D_TABLE_sinit.attrs["dspot"] = DSPOT
 
 		else:
+			timeAlive = time.perf_counter()
+			lkey = -1
 			for k in range(5):
 					D_TABLE_r[(DSPOT - k) % DLEN] = 0
 			newGame(rand)

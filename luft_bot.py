@@ -119,7 +119,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	init = tf.global_variables_initializer().run(session=sess)
 
 	cdir = os.path.dirname(os.path.realpath(__file__))
-	#saver.restore(sess, cdir+"\luft.ckpt") #one time load of previous net
+	saver.restore(sess, cdir+"\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
 	#print(D_TABLE_sinit[0][0], "***")
@@ -132,7 +132,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	time.sleep(.2)
 	
 	print("Starting loop")
-	for i in range(5000+1): #LEARN THE GAME FOR A WHILE
+	for i in range(75000+1): #LEARN THE GAME FOR A WHILE
 		print("Step:", i, end="\r")
 
 		if not rand: #if not making a new d_tablwxe, train

@@ -2,6 +2,7 @@ from ctypes import *
 import numpy as np #I'll refer to numpy as np and tensorflow as tf
 import struct
 import tensorflow as tf
+import h5py
 import os
 import random
 import time
@@ -9,21 +10,24 @@ import time
 SHRINK = 2 #how much to shrink the image cap
 DEAD_VAL = 81 #screen color when dead
 IS_DEAD = False #if AI is dead
+
+hdinit = False
+makeDTable = False #IMPORTANT whether or not to create new d_table
+
+dtFull = False
+
 DLEN = 500000 #d_table len
-OLD_D = 0 #spot to replace when adding event to d_table
+DSPOT = 0 #spot to replace when adding event to d_table
+H5FILE = None
+D_TABLE_sinit = None
+D_TABLE_snext = None
+D_TABLE_r = None
+D_TABLE_a = None
 
-makeDTable = True #IMPORTANT whether or not to create new d_table
-
-dtmp = [[[], 0, 0, []]] * DLEN #d_table structure, each e is 
-	#[0] a list of screens, 
-	#[1] the score, 
-	#[2] the action taken, 
-	#[3] a list of screens including the next screen but not the 0th screen
-D_TABLE = np.array(dtmp) #make d_table
 ScoreArr = c_int32 * 2
 SCORE = ScoreArr(0, 0) #ctypes arr for score and mult variables
 
-l_rate = .0001 #learning rate
+l_rate = .0003 #learning rate
 
 
 def getImgData(plen, nw, nh): #gets pixel data from luft_util
@@ -38,18 +42,22 @@ def getImgData(plen, nw, nh): #gets pixel data from luft_util
 		if i != DEAD_VAL:
 			IS_DEAD = False
 
-	return pixList.reshape([nw, nh, 1]) #make the ar 3D and return it
+	return pixList.reshape([nw, nh, 1]) #make the arr 3D and return it
 
 def getShortList(llen): #uses a resevoir picker to get llen items from the d_table
 	slist = []
-	for i, e in enumerate(D_TABLE):
+	if dtFull:
+		dtlen = DLEN
+	else:
+		dtlen = D_TABLE_sinit.attrs["dspot"]
+	for i in range(dtlen):
 		if i < llen:
-			slist.append(e)
+			slist.append(i)
 		elif random.random() < llen/(i+1):
-			slist[random.randint(0, len(slist)-1)] = e
+			slist[random.randint(0, len(slist)-1)] = i
 	return slist
 
-def newGame(rand): #performs new games actions
+def newGame(rand): #performs new game actions
 	global IS_DEAD
 	for i in range(4, 8):
 		luft_util.sendKey(i)
@@ -62,7 +70,6 @@ def newGame(rand): #performs new games actions
 	time.sleep(.1)
 	luft_util.sendKey(6)
 	IS_DEAD = False
-	#print("im dead!!!!!! ahh it burns!!!") 
 
 def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv layer
     conv_filterS = [filterS[0], filterS[1], channelN, filterN] #set up filter to scan image with
@@ -76,51 +83,9 @@ def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv
     out_layer = tf.nn.max_pool(out_layer, ksize=ksize, strides=strides, padding='SAME') #finish conv layer with pool
 
     return out_layer
-
-def concatDTable(): #load d_table from a file and set OLD_D to end of file
-	global OLD_D
-	global D_TABLE
-	tmp = np.load("d_table.npz")['dt']
-	c = 0
-	ce = 0
-	for e in tmp:
-		c += 1
-		if e[0] != []:
-			ce += 1
-			D_TABLE[OLD_D][0] = e[0]
-			D_TABLE[OLD_D][1] = e[1]
-			D_TABLE[OLD_D][2] = e[2]
-			D_TABLE[OLD_D][3] = e[3]
-			OLD_D = (OLD_D + 1) % DLEN
-	print("Loaded npy file with spot:", OLD_D, "went through:", c, "good events:", ce)
-
-def shrinkDTable():
-	global DLEN
-	global D_TABLE
-	global OLD_D
-	tmp_l = np.load("d_table.npz")['dt']
-	c = 0
-	for e in tmp_l:
-		if e[0] != []:
-			c += 1
-	DLEN = c
-	tmp = [[[], 0, 0, []]] * DLEN
-	tmp_t = np.array(tmp)
-	c = 0
-	for e in tmp_l:
-		if e[0] != []:
-			#print(e[0])
-			tmp_t[c][0] = e[0]
-			tmp_t[c][1] = e[1]
-			tmp_t[c][2] = e[2]
-			tmp_t[c][3] = e[3]
-			c = (c + 1) % DLEN
-	OLD_D = DLEN - 1
-	D_TABLE = tmp_t
-	print("new dlen:", DLEN)
-
+	
 def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
-	global OLD_D
+	global DSPOT
 	global D_TABLE
 	x = tf.placeholder(tf.float32, [4, nw, nh, 1]) #actual image
 
@@ -157,12 +122,9 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	#saver.restore(sess, cdir+"\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
-	if rand:
-		print("Making new random events")
-		concatDTable() #if we're not making a new d_table, load the old one
-	else:
-		print("Getting ready to train")
-		shrinkDTable() #else, load it and find dlen
+	#print(D_TABLE_sinit[0][0], "***")
+	#print(D_TABLE_sinit[DSPOT-1][0], "***")
+	#print(D_TABLE_sinit[DSPOT][0], "***")
 
 	luft_util.sendKey(2) #start first game
 	time.sleep(.1)
@@ -170,65 +132,73 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	time.sleep(.2)
 	
 	print("Starting loop")
-	for i in range(5001): #LEARN THE GAME FOR A WHILE
+	for i in range(5000+1): #LEARN THE GAME FOR A WHILE
 		print("Step:", i, end="\r")
 
 		if not rand: #if not making a new d_tablwxe, train
 
-			if i % 200 == 0 and i != 0: #save net every 200 steps
+			if i % 500 == 0 and i != 0: #save net every 200 steps
 				saver.save(sess, cdir+"\luft.ckpt")
 				print("Saved net on step", i)
 
-			elist = getShortList(4) #get events from d_table
+			elist = getShortList(6) #get events from d_table
 
 			for e in elist: #train on every event in elist
-				pInit = sess.run(out_layer, feed_dict={x: e[0]})[0] #run init screens through
+				pInit = sess.run(out_layer, feed_dict={x: D_TABLE_sinit[e]})[0] #run init screens through
 				qsa = [0] * 8
-				qsa[e[2]] = pInit[e[2]] #make an array of all 0s except where the max of pInit was
+				a = D_TABLE_a[e]
+				qsa[a] = pInit[a] #make an array of all 0s except where the max of pInit was
 				m = [0] * 8
-				m[e[2]] = 1 #make a mask of 0s except a 1 where the max of pInit was
-				sess.run(trainer, feed_dict={x: e[3], rt: [e[1]], mask: m, oPred: qsa}) #finish training and update the weights
+				m[a] = 1 #make a mask of 0s except a 1 where the max of pInit was
+				sess.run(trainer, feed_dict={x: D_TABLE_snext[e], rt: [D_TABLE_r[e]], mask: m, oPred: qsa}) #finish training and update the weights
 
-		elif i % 500 == 0 and i != 0: #if making a new d_table, save the d_table every 500 steps
-			np.savez_compressed("d_table.npz", dt=D_TABLE)
-			print("Saved d_table on step", i)
+		elif i % 1000 == 0 and i != 0: #if making a new d_table, save the d_table every n steps
+			H5FILE.flush()
+			print("Flushed d_table to file on step", i)
 
-		en = [[], 0, 0, []] #after training, make a new event
+		en_sinit = [] #after training, make a new event
+		en_snext = []
+		en_r = 0
+		en_a = 0
 		for i in range(4): #get the current 4 screens
-			en[0].append(getImgData(plen, nw, nh))
+			en_sinit.append(getImgData(plen, nw, nh))
 			if IS_DEAD: #check if the AI died
 				break
 		if not IS_DEAD:
-			en[3] = en[0][1:] #set e[3] to have the last 3 screens from e[0]
-			pf = sess.run(out_layer, feed_dict={x: en[0]})[0] #get suggested key for the current state
+			en_snext = en_sinit[1:] #set snext to have the last 3 screens from sinit
+			pf = sess.run(out_layer, feed_dict={x: en_sinit})[0] #get suggested key for the current state
 			#print(pf)
 			if not rand: #not making d_table, set normally
 				ksend = pf.argmax()
+				if pf[ksend] != 0:
+					luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
 			else: #else, set randomly
 				ksend = random.randint(0, 7)
-			luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
+				luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
+			
 			luft_util.readGameMem(byref(SCORE)) #read score
-			en[3].append(getImgData(plen, nw, nh)) #get new screen
+			en_snext.append(getImgData(plen, nw, nh)) #get new screen
 			if IS_DEAD: #if AI died, don't add new event
 				newGame(rand)
-			else: #else, add event to spot old_d in d_table
-				en[1] = SCORE[0]
-				en[2] = ksend
+			else: #else, add event to spot DSPOT in d_table
+				en_r = SCORE[0]
+				en_a = ksend
+				for i in range(4):
+					np.copyto(D_TABLE_sinit[DSPOT][i], en_sinit[i])
+					np.copyto(D_TABLE_snext[DSPOT][i], en_snext[i])
+				D_TABLE_r[DSPOT] = en_r
+				D_TABLE_a[DSPOT] = en_a
 
-				if en[0] != []:
-					D_TABLE[OLD_D][0] = en[0]
-					D_TABLE[OLD_D][1] = en[1]
-					D_TABLE[OLD_D][2] = en[2]
-					D_TABLE[OLD_D][3] = en[3]
-					OLD_D = (OLD_D + 1) % DLEN #change old_d
+
+				
+				DSPOT = (DSPOT + 1) % DLEN #change DSPOT
+				if DSPOT == 0:
+					dtFull = True
+				D_TABLE_sinit.attrs["dspot"] = DSPOT
+
 		else:
 			newGame(rand)
 
-
-		
-
-	#np.save("d_table.npy", D_TABLE) #save net and d_table
-	saver.save(sess, cdir+"\luft.ckpt")
 
 
 
@@ -244,8 +214,25 @@ nimg_h = int(img_h/SHRINK) #adjust data
 nimg_w = int(img_w/SHRINK)
 
 
+if hdinit:
+	H5FILE = h5py.File("d_table.hdf5", "w-")
+	H5FILE.create_dataset("dtable/sinit", (DLEN, 4, nimg_w, nimg_h, 1), dtype="i8", chunks=True, compression="lzf", shuffle=True)
+	H5FILE.create_dataset("dtable/snext", (DLEN, 4, nimg_w, nimg_h, 1), dtype="i8", chunks=True, compression="lzf", shuffle=True)
+	H5FILE.create_dataset("dtable/r", (DLEN,), dtype="i", chunks=True, compression="lzf", shuffle=True)
+	H5FILE.create_dataset("dtable/a", (DLEN,), dtype="i", chunks=True, compression="lzf", shuffle=True)
+	H5FILE["dtable"]["sinit"].attrs["dspot"] = 0
+	exit(0)
+	
+H5FILE = h5py.File("d_table.hdf5", "r+")
+D_TABLE_sinit = H5FILE["dtable"]["sinit"]
+D_TABLE_snext = H5FILE["dtable"]["snext"]
+D_TABLE_r = H5FILE["dtable"]["r"]
+D_TABLE_a = H5FILE["dtable"]["a"]
+DSPOT = D_TABLE_sinit.attrs["dspot"]
+print("Loaded hdf5 file, DSPOT:", DSPOT)
 
 runConvNet(pixLen, nimg_w, nimg_h, l_rate, makeDTable) #start training
 
 luft_util.closePMem() #free memory in luft_util
+H5FILE.close()
 

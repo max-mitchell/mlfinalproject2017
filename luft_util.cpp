@@ -47,7 +47,6 @@ extern "C" { //means it's good for any version of c
         GetWindowRect(WINDOW, &rect); //get image data
         MAX_WIDTH = rect.right - rect.left;
         MAX_HEIGHT = rect.bottom - rect.top;
-	    InvalidateRect(WINDOW, &rect, 0);
       
         GetWindowThreadProcessId(WINDOW, &PID); //get pid 
         PROCESS = OpenProcess(PROCESS_ALL_ACCESS, FALSE, PID); //get process handle
@@ -119,7 +118,7 @@ extern "C" { //means it's good for any version of c
                 i += MAX_WIDTH * PIX_DEPTH * (shrink - 1);
             }
         }
-	    InvalidateRect(WINDOW, &rect, 1);
+	    //InvalidateRect(WINDOW, &rect, 1);
       	ReleaseDC(WINDOW, dc); //free dc
         SelectObject(dcTmp, pbitmap);
         DeleteDC(dcTmp);
@@ -193,9 +192,11 @@ extern "C" { //means it's good for any version of c
     int main() { //for testing purposes
         init();
         int *score = new int[2];
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 5000; i++) {
             readGameMem(score);
             getPix(2);
+            sendKey(0);
+            sendKey(4);
         }
         delete [] score;
         closePMem();

@@ -133,6 +133,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	print("Starting loop")
 	timeAlive = time.perf_counter()
 	lkey = -1
+	lscore = 0
 	totScore = 0
 	numGames = 0
 	for i in range(75000+1): #LEARN THE GAME FOR A WHILE
@@ -203,11 +204,15 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 					D_TABLE_r[(DSPOT - k) % DLEN] = 0
 				newGame(rand)
 			else: #else, add event to spot DSPOT in d_table
-				nscore = SCORE[0] - int(1/((time.perf_counter()-timeAlive) / 1000.0))
-				if nscore < 0:
-					nscore = 0
+				#nscore = SCORE[0] - int(1/((time.perf_counter()-timeAlive) / 1000.0))
+				#if nscore < 0:
+				#	nscore = 0
 				#print(pf[ksend], keyCode[ksend], "Score:", nscore)
-				en_r = nscore
+				if lscore == SCORE[0]:
+					en_r = 0
+				else:
+					en_r = SCORE[1]
+					lscore = SCORE[0]
 				en_a = ksend
 				np.copyto(D_TABLE_sinit[DSPOT], en_sinit)
 				np.copyto(D_TABLE_snext[DSPOT], en_snext)

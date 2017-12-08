@@ -136,7 +136,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	lscore = 0
 	totScore = 0
 	numGames = 0
-	for i in range(75000+1): #LEARN THE GAME FOR A WHILE
+	for i in range(60000+1): #LEARN THE GAME FOR A WHILE
 		print("Step:", i, end="\r")
 
 		if not rand: #if not making a new d_tablwxe, train

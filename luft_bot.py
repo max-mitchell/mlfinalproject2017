@@ -16,13 +16,13 @@ makeDTable = False #IMPORTANT whether or not to create new d_table
 
 dtFull = False
 
-DLEN = 70000 #d_table len, Maxlen=500000, don't go above this
+DLEN = 200000 #d_table len, Maxlen=500000, don't go above this
 DSPOT = 0 #spot to replace when adding event to d_table
 
 ScoreArr = c_int32 * 2
 SCORE = ScoreArr(0, 0) #ctypes arr for score and mult variables
 
-l_rate = .00001 #learning rate
+l_rate = .00005 #learning rate
 
 doRMove = .01
 
@@ -170,9 +170,9 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 		if not IS_DEAD:
 			en_snext = np.copy(en_sinit)
 			en_sinit = np.reshape(en_sinit, (nw, nh, 4))
-			pf = sess.run(out_layer, feed_dict={x: [en_sinit]})[0] #get suggested key for the current state
 			#print(pf)
 			if not rand: #not making d_table, set normally
+				pf = sess.run(out_layer, feed_dict={x: [en_sinit]})[0] #get suggested key for the current state
 				if random.random() > doRMove:
 					ksend = pf.argmax()
 					if pf[ksend] != 0 and ksend != lkey:
@@ -183,8 +183,8 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 					if ksend != lkey:
 						luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
 						lkey = ksend
-					if doRMove > .0000001:
-						doRMove -= .0000001
+					if doRMove > .000001:
+						doRMove -= .000001
 			else: #else, set randomly
 				ksend = random.randint(0, 7)
 				if ksend != lkey:

@@ -11,7 +11,7 @@ using namespace std;
 
 #define _LUFTUTIL_H_ //from .h file
 
-extern "C" { //means it's good for any version of c
+extern "C" { //means it's good for any version of c 
 
     HWND WINDOW; //handle to the Luftrausers window
     HANDLE PROCESS; //handle to the Luftrausers process

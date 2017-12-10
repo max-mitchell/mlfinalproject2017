@@ -12,7 +12,7 @@ DEAD_VAL = 81 #screen color when dead
 IS_DEAD = False #if AI is dead
 
 hdinit = False
-makeDTable = True #IMPORTANT whether or not to create new d_table
+makeDTable = False #IMPORTANT whether or not to create new d_table
 
 dtFull = False
 
@@ -25,6 +25,8 @@ SCORE = ScoreArr(0, 0) #ctypes arr for score and mult variables
 l_rate = .00005 #learning rate
 
 doRMove = .01
+
+avgSaveRate = 20
 
 keyCode = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
@@ -115,7 +117,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	init = tf.global_variables_initializer().run(session=sess)
 
 	cdir = os.path.dirname(os.path.realpath(__file__))
-	saver.restore(sess, cdir+"\data\luft.ckpt") #one time load of previous net
+	saver.restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
 	#print(D_TABLE_sinit[0][0], "***")
@@ -133,13 +135,13 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	lscore = 0
 	totScore = 0
 	numGames = 0
-	for i in range(60000+1): #LEARN THE GAME FOR A WHILE
+	for i in range(55000+1): #LEARN THE GAME FOR A WHILE
 		print("Step:", i, end="\r")
 
 		if not rand: #if not making a new d_tablwxe, train
 
 			if i % 200 == 0 and i != 0: #save net every 200 steps
-				saver.save(sess, cdir+"\data\luft.ckpt")
+				saver.save(sess, cdir+"\..\data\luft.ckpt")
 				print("Saved net on step", i)
 
 			elist = getShortList(4) #get events from d_table
@@ -152,10 +154,6 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				m = [0] * 8
 				m[a] = 1 #make a mask of 0s except a 1 where the max of pInit was
 				sess.run(trainer, feed_dict={x: [D_TABLE_sinit[e]], rt: [D_TABLE_r[e]], mask: m, nPred: qsa}) #finish training and update the weights
-
-		if i % 1000 == 0 and i != 0: #if making a new d_table, save the d_table every n steps
-			H5FILE.flush()
-			print("Flushed d_table to file on step", i)
 
 		en_sinit = np.zeros((nh*nw, 4), dtype=np.int8) #after training, make a new event
 		en_r = 0
@@ -194,13 +192,14 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 			if IS_DEAD: #if AI died, don't add new event
 				#timeAlive = time.perf_counter()
 				lkey = -1
-				numGames += 1
-				totScore += SCORE[0]
-				if numGames % 5 == 0:
-					SCORE_AVG[GAME_NUM] = totScore/5
-					print("Average Score over last 5 games:", (totScore/5))
-					GAME_NUM += 1
-					totScore = 0
+				if not rand:
+					numGames += 1
+					totScore += SCORE[0]
+					if numGames % avgSaveRate == 0:
+						SCORE_AVG[GAME_NUM] = totScore/avgSaveRate
+						print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
+						GAME_NUM += 1
+						totScore = 0
 				newGame(rand)
 			else: #else, add event to spot DSPOT in d_table
 				#nscore = SCORE[0] - int(1/((time.perf_counter()-timeAlive) / 1000.0))
@@ -226,13 +225,14 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 		else:
 			#timeAlive = time.perf_counter()
 			lkey = -1
-			numGames += 1
-			totScore += SCORE[0]
-			if numGames % 5 == 0:
-				SCORE_AVG[GAME_NUM] = totScore/5
-				print("Average Score over last 5 games:", (totScore/5))
-				GAME_NUM += 1
-				totScore = 0
+			if not rand:
+				numGames += 1
+				totScore += SCORE[0]
+				if numGames % avgSaveRate == 0:
+					SCORE_AVG[GAME_NUM] = totScore/avgSaveRate
+					print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
+					GAME_NUM += 1
+					totScore = 0
 			newGame(rand)
 
 

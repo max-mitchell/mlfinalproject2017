@@ -1,2 +1,2 @@
-model_checkpoint_path: "G:\\User Stuff\\Documents\\OBERLIN\\Oberlin CS\\CS 374\\Final Project\\luft.ckpt"
-all_model_checkpoint_paths: "G:\\User Stuff\\Documents\\OBERLIN\\Oberlin CS\\CS 374\\Final Project\\luft.ckpt"
+model_checkpoint_path: "G:\\User Stuff\\Documents\\OBERLIN\\Oberlin CS\\CS 374\\Final Project\\py\\..\\data\\luft.ckpt"
+all_model_checkpoint_paths: "G:\\User Stuff\\Documents\\OBERLIN\\Oberlin CS\\CS 374\\Final Project\\py\\..\\data\\luft.ckpt"

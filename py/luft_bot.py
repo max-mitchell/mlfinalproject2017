@@ -198,7 +198,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 					if numGames % avgSaveRate == 0:
 						SCORE_AVG[GAME_NUM] = totScore/avgSaveRate
 						print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
-						GAME_NUM += 1
+						GAME_NUM = GAME_NUM + 1
 						totScore = 0
 				newGame(rand)
 			else: #else, add event to spot DSPOT in d_table
@@ -231,7 +231,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				if numGames % avgSaveRate == 0:
 					SCORE_AVG[GAME_NUM] = totScore/avgSaveRate
 					print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
-					GAME_NUM += 1
+					GAME_NUM = GAME_NUM + 1
 					totScore = 0
 			newGame(rand)
 

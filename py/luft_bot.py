@@ -26,7 +26,7 @@ l_rate = .00005 #learning rate
 
 doRMove = .01
 
-avgSaveRate = 20
+avgSaveRate = 1
 
 keyCode = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
@@ -117,7 +117,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	init = tf.global_variables_initializer().run(session=sess)
 
 	cdir = os.path.dirname(os.path.realpath(__file__))
-	saver.restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
+	#saver.restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
 	#print(D_TABLE_sinit[0][0], "***")
@@ -141,7 +141,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 		if not rand: #if not making a new d_tablwxe, train
 
 			if i % 200 == 0 and i != 0: #save net every 200 steps
-				saver.save(sess, cdir+"\..\data\luft.ckpt")
+				saver.save(sess, cdir+"\..\data\luft_new.ckpt")
 				print("Saved net on step", i)
 
 			elist = getShortList(4) #get events from d_table
@@ -193,31 +193,39 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				#timeAlive = time.perf_counter()
 				lkey = -1
 				if not rand:
+					SCORE_AVG[numGames] = SCORE[0]
+					numGames += 1
+					"""
 					numGames += 1
 					totScore += SCORE[0]
 					if numGames % avgSaveRate == 0:
-						SCORE_AVG[GAME_NUM] = totScore/avgSaveRate
+						SCORE_AVG[numGames] = totScore/avgSaveRate
 						print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
 						GAME_NUM = GAME_NUM + 1
 						totScore = 0
+					"""
 				newGame(rand)
 			else: #else, add event to spot DSPOT in d_table
-				#nscore = SCORE[0] - int(1/((time.perf_counter()-timeAlive) / 1000.0))
-				#if nscore < 0:
-				#	nscore = 0
-				#print(pf[ksend], keyCode[ksend], "Score:", nscore)
+				"""
+				nscore = SCORE[0] - int(1/((time.perf_counter()-timeAlive) / 1000.0))
+				if nscore < 0:
+					nscore = 0
+				print(pf[ksend], keyCode[ksend], "Score:", nscore)
+				"""
 				if lscore == SCORE[0]:
 					en_r = 0
 				else:
+					#en_r = SCORE[0] - lscore
 					en_r = SCORE[1]
+					if en_r < 0:
+						en_r = 0
 					lscore = SCORE[0]
+				
 				en_a = ksend
 				np.copyto(D_TABLE_sinit[DSPOT], en_sinit)
 				np.copyto(D_TABLE_snext[DSPOT], en_snext)
 				D_TABLE_r[DSPOT] = en_r
 				D_TABLE_a[DSPOT] = en_a
-
-
 				
 				DSPOT = (DSPOT + 1) % DLEN #change DSPOT
 				D_TABLE_sinit.attrs["dspot"] = DSPOT
@@ -226,6 +234,9 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 			#timeAlive = time.perf_counter()
 			lkey = -1
 			if not rand:
+				SCORE_AVG[numGames] = SCORE[0]
+				numGames += 1
+				"""
 				numGames += 1
 				totScore += SCORE[0]
 				if numGames % avgSaveRate == 0:
@@ -233,6 +244,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 					print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
 					GAME_NUM = GAME_NUM + 1
 					totScore = 0
+				"""
 			newGame(rand)
 
 
@@ -267,8 +279,9 @@ else:
 	D_TABLE_a = H5FILE["dtable"]["a"]
 	SCORE_AVG = H5FILE["avg"]
 	DSPOT = D_TABLE_sinit.attrs["dspot"]
-	GAME_NUM = SCORE_AVG.attrs["game_num"]
-	print("Loaded hdf5 file, DSPOT:", DSPOT)
+	GAME_NUM = H5FILE["avg"].attrs["game_num"]
+	print("Loaded hdf5 file, DSPOT:", DSPOT, "GAME_NUM:", GAME_NUM)
+
 
 	runConvNet(pixLen, nimg_w, nimg_h, l_rate, makeDTable) #start training
 

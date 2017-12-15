@@ -9,3 +9,8 @@ GAME_NUM = SCORE_AVG.attrs["game_num"]
 stp = [i for i in range(400)]
 plt.scatter(stp, SCORE_AVG[:400])
 plt.show()
+
+file = open("d_out.csv", "w+")
+for i in range(400):
+	file.write(str(i)+","+str(SCORE_AVG[i])+"\n")
+file.close()

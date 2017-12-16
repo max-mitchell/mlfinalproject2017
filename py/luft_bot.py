@@ -117,7 +117,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	init = tf.global_variables_initializer().run(session=sess)
 
 	cdir = os.path.dirname(os.path.realpath(__file__))
-	#saver.restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
+	saver.restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
 	#print(D_TABLE_sinit[0][0], "***")
@@ -141,7 +141,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 		if not rand: #if not making a new d_tablwxe, train
 
 			if i % 200 == 0 and i != 0: #save net every 200 steps
-				saver.save(sess, cdir+"\..\data\luft_new.ckpt")
+				saver.save(sess, cdir+"\..\data\luft.ckpt")
 				print("Saved net on step", i)
 
 			elist = getShortList(4) #get events from d_table

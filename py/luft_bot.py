@@ -13,6 +13,7 @@ IS_DEAD = False #if AI is dead
 
 hdinit = False
 makeDTable = False #IMPORTANT whether or not to create new d_table
+expConvNet = True
 
 dtFull = False
 
@@ -26,7 +27,7 @@ l_rate = .00005 #learning rate
 
 doRMove = .01
 
-avgSaveRate = 1
+avgSaveRate = 5
 
 keyCode = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
@@ -195,7 +196,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				if not rand:
 					SCORE_AVG[numGames] = SCORE[0]
 					numGames += 1
-					"""
+					
 					numGames += 1
 					totScore += SCORE[0]
 					if numGames % avgSaveRate == 0:
@@ -203,7 +204,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 						print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
 						GAME_NUM = GAME_NUM + 1
 						totScore = 0
-					"""
+					
 				newGame(rand)
 			else: #else, add event to spot DSPOT in d_table
 				"""
@@ -236,7 +237,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 			if not rand:
 				SCORE_AVG[numGames] = SCORE[0]
 				numGames += 1
-				"""
+				
 				numGames += 1
 				totScore += SCORE[0]
 				if numGames % avgSaveRate == 0:
@@ -244,9 +245,16 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 					print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
 					GAME_NUM = GAME_NUM + 1
 					totScore = 0
-				"""
+				
 			newGame(rand)
 
+def renderConvNet():
+	sess = tf.Session()
+	init = tf.global_variables_initializer().run(session=sess)
+
+	cdir = os.path.dirname(os.path.realpath(__file__))
+	tf.train.Saver().restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
+	print("Loaded tensorflow net")
 
 
 
@@ -261,6 +269,10 @@ img_w = luft_util.getW()
 nimg_h = int(img_h/SHRINK) #adjust data
 nimg_w = int(img_w/SHRINK)
 
+if expConvNet:
+	print("Exp Conv Net Init")
+	renderConvNet()
+	raise SystemExit
 
 if hdinit:
 	H5FILE = h5py.File("data/d_table.hdf5", "w-")

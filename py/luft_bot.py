@@ -6,6 +6,8 @@ import h5py
 import os
 import random
 import time
+from memory_profiler import profile
+import sys
 
 SHRINK = 2 #how much to shrink the image cap
 DEAD_VAL = 81 #screen color when dead
@@ -13,7 +15,7 @@ IS_DEAD = False #if AI is dead
 
 hdinit = False
 makeDTable = False #IMPORTANT whether or not to create new d_table
-expConvNet = True
+expConvNet = False
 
 dtFull = False
 
@@ -82,6 +84,7 @@ def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv
 
     return out_layer
 	
+#@profile
 def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	global DSPOT
 	global GAME_NUM
@@ -137,7 +140,8 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	totScore = 0
 	numGames = 0
 	for i in range(55000+1): #LEARN THE GAME FOR A WHILE
-		print("Step:", i, end="\r")
+		#print("Step:", i, end="\r")
+		print("1)",sys.getsizeof(trainer))
 
 		if not rand: #if not making a new d_tablwxe, train
 
@@ -155,6 +159,8 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 				m = [0] * 8
 				m[a] = 1 #make a mask of 0s except a 1 where the max of pInit was
 				sess.run(trainer, feed_dict={x: [D_TABLE_sinit[e]], rt: [D_TABLE_r[e]], mask: m, nPred: qsa}) #finish training and update the weights
+
+		print("2)",sys.getsizeof(trainer))
 
 		en_sinit = np.zeros((nh*nw, 4), dtype=np.int8) #after training, make a new event
 		en_r = 0
@@ -204,6 +210,7 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 						print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
 						GAME_NUM = GAME_NUM + 1
 						totScore = 0
+						
 					
 				newGame(rand)
 			else: #else, add event to spot DSPOT in d_table

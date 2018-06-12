@@ -9,55 +9,53 @@ import time
 from memory_profiler import profile
 import sys
 
-SHRINK = 2 #how much to shrink the image cap
+SHRINK_VAL = 2 #how much to shrink the image cap
 DEAD_VAL = 81 #screen color when dead
 IS_DEAD = False #if AI is dead
 
-hdinit = False
-makeDTable = False #IMPORTANT whether or not to create new d_table
-expConvNet = False
+h5py_init = False
+random_training = True #IMPORTANT whether or not to create new d_table
+export_conv_net = False
 
-dtFull = False
+DTABLE_LEN = 500000 #d_table len, Maxlen=500000, don't go above this
+DTABLE_SPOT = 0 #spot to replace when adding event to d_table
 
-DLEN = 500000 #d_table len, Maxlen=500000, don't go above this
-DSPOT = 0 #spot to replace when adding event to d_table
-
-ScoreArr = c_int32 * 2
-SCORE = ScoreArr(0, 0) #ctypes arr for score and mult variables
+score_arr = c_int32 * 2
+SCORE = score_arr(0, 0) #ctypes arr for score and mult variables
 
 l_rate = .00005 #learning rate
 
-doRMove = .01
+rand_move_chance = .1
 
-avgSaveRate = 5
+score_save_rate = 5
 
-keyCode = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
+key_code = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
-def getImgData(plen, nw, nh, plist, pspot): #gets pixel data from luft_util
+def getImgData(w_small, h_small, p_list, p_spot): #gets pixel data from luft_util
 	global IS_DEAD
-	pix_ptr = cast(getPix(SHRINK), POINTER(c_char)) #actual method call
+	pix_ptr = cast(get_pixels(SHRINK_VAL), POINTER(c_char)) #actual method call
 
-	for i in range(nh*nw): #unpack each pixel and add it to np arr
-		plist[i][pspot] = struct.unpack('B', pix_ptr[i])[0]
+	for i in range(h_small*w_small): #unpack each pixel and add it to np arr
+		p_list[i][p_spot] = struct.unpack('B', pix_ptr[i])[0]
 
 
 	IS_DEAD = True
-	for i in plist[30000:30050][pspot]: #check if screen is dead screen
-		if i != DEAD_VAL:
+	for i in range(50,250,4): #check if screen is dead screen
+		if p_list[i^2][p_spot] != DEAD_VAL:
 			IS_DEAD = False
 
 
 
-def getShortList(llen): #uses a resevoir picker to get llen items from the d_table
-	slist = []
-	for i in range(DSPOT):
-		if i < llen:
-			slist.append(i)
-		elif random.random() < llen/(i+1):
-			slist[random.randint(0, len(slist)-1)] = i
-	return slist
+def getShortList(l_len): #uses a resevoir picker to get l_len items from the d_table
+	s_list = []
+	for i in range(DTABLE_SPOT):
+		if i < l_len:
+			s_list.append(i)
+		elif random.random() < l_len/(i+1):
+			s_list[random.randint(0, len(s_list)-1)] = i
+	return s_list
 
-def newGame(rand): #performs new game actions
+def newGame(rand_mode): #performs new game actions
 	global IS_DEAD
 	for i in range(4, 8):
 		luft_util.sendKey(i)
@@ -71,62 +69,57 @@ def newGame(rand): #performs new game actions
 	luft_util.sendKey(6)
 	IS_DEAD = False
 
-def makeConvLayer(pData, channelN, filterN, filterS, poolS, strideN): #make conv layer
-    conv_filterS = [filterS[0], filterS[1], channelN, filterN] #set up filter to scan image with
+def makeConvLayer(p_data, channel_n, filter_n, filter_s, pool_s, stride_n): #make conv layer
+    conv_filterS = [filter_s[0], filter_s[1], channel_n, filter_n] #set up filter to scan image with
     weights = tf.Variable(tf.truncated_normal(conv_filterS, stddev=0.03)) #set random weights to begin with
-    bias = tf.Variable(tf.truncated_normal([filterN])) #set random bias
-    out_layer = tf.nn.conv2d(pData, weights, [1, strideN[0], strideN[1], 1], padding='SAME') #make out_layer by scanning image with filter
-    out_layer += bias 
-    out_layer = tf.nn.relu(out_layer) #pass out_layer through relu
-    ksize = [1, poolS[0], poolS[1], 1]
+    bias = tf.Variable(tf.truncated_normal([filter_n])) #set random bias
+    out_final_layer = tf.nn.conv2d(p_data, weights, [1, stride_n[0], stride_n[1], 1], padding='SAME') #make out_final_layer by scanning image with filter
+    out_final_layer += bias 
+    out_final_layer = tf.nn.relu(out_final_layer) #pass out_final_layer through relu
+    k_size = [1, pool_s[0], pool_s[1], 1]
     strides = [1, 2, 2, 1]
-    out_layer = tf.nn.max_pool(out_layer, ksize=ksize, strides=strides, padding='SAME') #finish conv layer with pool
+    out_final_layer = tf.nn.max_pool(out_final_layer, ksize=k_size, strides=strides, padding='SAME') #finish conv layer with pool
 
-    return out_layer
+    return out_final_layer
 	
 #@profile
-def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
-	global DSPOT
-	global GAME_NUM
-	global doRMove
-	x = tf.placeholder(tf.float32, [1, nw, nh, 4]) #actual image
+def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python code
+	global DTABLE_SPOT
+	global rand_move_chance
+	image_layer = tf.placeholder(tf.float32, [1, w_small, h_small, 4]) #actual image
 
-	mask = tf.placeholder(tf.float32, [8]) #stores which action was taken last time
-	rt = tf.placeholder(tf.float32, [1]) #stores score at time of event
-	nPred = tf.placeholder(tf.float32, [8]) #stores out_layer from first four screens
+	last_action_layer = tf.placeholder(tf.float32, [8]) #stores which action was taken last time
+	current_score_layer = tf.placeholder(tf.float32, [1]) #stores score at time of event
+	last_four_screens_out = tf.placeholder(tf.float32, [8]) #stores out_final_layer from first four screens
 
-	L1 = makeConvLayer(x, 4, 32, [8, 8], [1, 1], [4, 4]) #run through conv net
-	L2 = makeConvLayer(L1, 32, 64, [4, 4], [1, 1], [3, 3])
-	L3 = makeConvLayer(L2, 64, 64, [3, 3], [1, 1], [1, 1])
-	nlen = int(768) #as long as Luftrausers is at its default resolution, this works
+	conv_1 = makeConvLayer(image_layer, 4, 32, [8, 8], [1, 1], [4, 4]) #run through conv net
+	conv_2 = makeConvLayer(conv_1, 32, 64, [4, 4], [1, 1], [3, 3])
+	conv_3 = makeConvLayer(conv_2, 64, 64, [3, 3], [1, 1], [1, 1])
+	conv_out_len = int(768) #as long as Luftrausers is at its default resolution, this works
 
-	L3_flat = tf.reshape(L3, [1, nlen]) #stretch the output back out
+	conv_3_flat = tf.reshape(conv_3, [1, conv_out_len]) #stretch the output back out
 
-	weight_d1 = tf.Variable(tf.truncated_normal([nlen, 512], stddev=0.03)) #run two fully connected layers
-	bias_d1 = tf.Variable(tf.truncated_normal([512], stddev=0.01))
-	denseL1 = tf.matmul(L3_flat, weight_d1) + bias_d1
-	denseL1 = tf.nn.relu(denseL1)
+	weight_dense = tf.Variable(tf.truncated_normal([conv_out_len, 512], stddev=0.03)) #run two fully connected layers
+	bias_dense = tf.Variable(tf.truncated_normal([512], stddev=0.01))
+	dense_out = tf.matmul(conv_3_flat, weight_dense) + bias_dense
+	dense_out = tf.nn.relu(dense_out)
 
 	weight_out = tf.Variable(tf.truncated_normal([512, 8], stddev=0.03))
 	bias_out = tf.Variable(tf.truncated_normal([8], stddev=0.01))
-	out_layer = tf.matmul(denseL1, weight_out) + bias_out
-	out_layer = tf.nn.relu(out_layer) #get actions probs for the controlls
+	out_final_layer = tf.matmul(dense_out, weight_out) + bias_out
+	out_final_layer = tf.nn.relu(out_final_layer) #get actions probs for the controlls
 
-	cost = (rt * mask + nPred * mask - np.amax(out_layer) * mask) ** 2 #make cost
-	trainer = tf.train.AdamOptimizer(lrt).minimize(cost) #minimize cost
+	cost = (current_score_layer * last_action_layer + last_four_screens_out * last_action_layer - np.amax(out_final_layer) * last_action_layer) ** 2 #make cost
+	trainer = tf.train.AdamOptimizer(learn_rate).minimize(cost) #minimize cost
 
 	saver = tf.train.Saver() #makes saver so we can save our net!
 
-	sess = tf.Session()
-	init = tf.global_variables_initializer().run(session=sess)
+	session = tf.Session()
+	init_Qnet = tf.global_variables_initializer().run(session=session)
 
-	cdir = os.path.dirname(os.path.realpath(__file__))
-	saver.restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
-	print("Loaded tensorflow net")
-
-	#print(D_TABLE_sinit[0][0], "***")
-	#print(D_TABLE_sinit[DSPOT-1][0], "***")
-	#print(D_TABLE_sinit[DSPOT][0], "***")
+	#current_dir = os.path.dirname(os.path.realpath(__file__))
+	#saver.restore(session, current_dir+"\..\data\luft.ckpt") #one time load of previous net
+	#print("Loaded tensorflow net")
 
 	luft_util.sendKey(2) #start first game
 	time.sleep(.1)
@@ -134,175 +127,164 @@ def runConvNet(plen, nw, nh, lrt, rand): #the bulk of the python code
 	time.sleep(.2)
 	
 	print("Starting loop")
-	timeAlive = time.perf_counter()
-	lkey = -1
-	lscore = 0
-	totScore = 0
-	numGames = 0
+	last_keypress_sent = -1
+	last_score_recorded = 0
+	total_summed_score = 0
+	num_summed_games = 0
 	for i in range(55000+1): #LEARN THE GAME FOR A WHILE
-		#print("Step:", i, end="\r")
-		print("1)",sys.getsizeof(trainer))
+		print("Step:", i, end="\r")
 
-		if not rand: #if not making a new d_tablwxe, train
+		if not rand_mode: #if not making a new d_tablwxe, train
 
 			if i % 200 == 0 and i != 0: #save net every 200 steps
-				saver.save(sess, cdir+"\..\data\luft.ckpt")
+				saver.save(session, current_dir+"\..\data\luft.ckpt")
 				print("Saved net on step", i)
 
-			elist = getShortList(4) #get events from d_table
+			event_list = getShortList(4) #get events from d_table
 
-			for e in elist: #train on every event in elist
-				pInit = sess.run(out_layer, feed_dict={x: [D_TABLE_snext[e]]})[0] #run init screens through
-				qsa = [0] * 8
-				a = D_TABLE_a[e]
-				qsa[a] = pInit[a] #make an array of all 0s except where the max of pInit was
-				m = [0] * 8
-				m[a] = 1 #make a mask of 0s except a 1 where the max of pInit was
-				sess.run(trainer, feed_dict={x: [D_TABLE_sinit[e]], rt: [D_TABLE_r[e]], mask: m, nPred: qsa}) #finish training and update the weights
+			for event in event_list: #train on every event in event_list
+				init_Qnet_out = session.run(out_final_layer, feed_dict={image_layer: [DTABLE_nextState[event]]})[0] #run init_Qnet screens through
+				init_Qnet_max = [0] * 8
+				action_taken = DTABLE_action[event]
+				init_Qnet_max[action_taken] = init_Qnet_out[action_taken] #make an array of all 0s except where the max of init_Qnet_out was
+				action_suggested = [0] * 8
+				action_suggested[action_taken] = 1 #make a last_action_layer of 0s except a 1 where the max of init_Qnet_out was
+				session.run(trainer, feed_dict={image_layer: [DTABLE_initState[event]], current_score_layer: [DTABLE_reward[event]], last_action_layer: action_suggested, last_four_screens_out: init_Qnet_max}) #finish training and update the weights
 
-		print("2)",sys.getsizeof(trainer))
 
-		en_sinit = np.zeros((nh*nw, 4), dtype=np.int8) #after training, make a new event
-		en_r = 0
-		en_a = 0
+		new_event_screens_current = np.zeros((h_small*w_small, 4), dtype=np.int8) #after training, make a new event
+		new_event_reward = 0
+		new_event_action = 0
 		for i in range(4):
-			getImgData(plen, nw, nh, en_sinit, i)
+			getImgData(w_small, h_small, new_event_screens_current, i)
 			if IS_DEAD: #check if the AI died
 				break;
 		if not IS_DEAD:
-			en_snext = np.copy(en_sinit)
-			en_sinit = np.reshape(en_sinit, (nw, nh, 4))
-			#print(pf)
-			if not rand: #not making d_table, set normally
-				pf = sess.run(out_layer, feed_dict={x: [en_sinit]})[0] #get suggested key for the current state
-				if random.random() > doRMove:
-					ksend = pf.argmax()
-					if pf[ksend] != 0 and ksend != lkey:
-						luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
-						lkey = ksend
+			new_event_screens_next = np.copy(new_event_screens_current)
+			new_event_screens_current = np.reshape(new_event_screens_current, (w_small, h_small, 4))
+			if not rand_mode: #not making d_table, set normally
+				new_Qnet_out = session.run(out_final_layer, feed_dict={image_layer: [new_event_screens_current]})[0] #get suggested key for the current state
+				if random.random() > rand_move_chance:
+					new_keypress = new_Qnet_out.argmax()
+					if new_Qnet_out[new_keypress] != 0 and new_keypress != last_keypress_sent:
+						luft_util.sendKey(int(new_keypress)) #send the chosen key stroke and see what happens
+						last_keypress_sent = new_keypress
 				else:
-					ksend = random.randint(0, 7)
-					if ksend != lkey:
-						luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
-						lkey = ksend
-					if doRMove > .000001:
-						doRMove -= .000001
+					new_keypress = random.randint(0, 7)
+					if new_keypress != last_keypress_sent:
+						luft_util.sendKey(int(new_keypress)) #send the chosen key stroke and see what happens
+						last_keypress_sent = new_keypress
+					if rand_move_chance > .0001:
+						rand_move_chance -= .0001
 			else: #else, set randomly
-				ksend = random.randint(0, 7)
-				if ksend != lkey:
-					luft_util.sendKey(int(ksend)) #send the chosen key stroke and see what happens
-					lkey = ksend
+				new_keypress = random.randint(0, 7)
+				if new_keypress != last_keypress_sent:
+					luft_util.sendKey(int(new_keypress)) #send the chosen key stroke and see what happens
+					last_keypress_sent = new_keypress
 
 			luft_util.readGameMem(byref(SCORE)) #read score
-			getImgData(plen, nw, nh, en_snext, 0)
-			en_snext = np.reshape(en_snext, (nw, nh, 4))
+			getImgData(w_small, h_small, new_event_screens_next, 0)
+			new_event_screens_next = np.reshape(new_event_screens_next, (w_small, h_small, 4))
 			if IS_DEAD: #if AI died, don't add new event
-				#timeAlive = time.perf_counter()
-				lkey = -1
-				if not rand:
-					SCORE_AVG[numGames] = SCORE[0]
-					numGames += 1
+				last_keypress_sent = -1
+				if not rand_mode:
+					SCORE_AVG[num_summed_games] = SCORE[0]
+					num_summed_games += 1
 					
-					numGames += 1
-					totScore += SCORE[0]
-					if numGames % avgSaveRate == 0:
-						SCORE_AVG[numGames] = totScore/avgSaveRate
-						print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
-						GAME_NUM = GAME_NUM + 1
-						totScore = 0
+					num_summed_games += 1
+					total_summed_score += SCORE[0]
+					if num_summed_games % score_save_rate == 0:
+						SCORE_AVG[num_summed_games] = total_summed_score/score_save_rate
+						print("Average Score over last", score_save_rate, "games:", (total_summed_score/score_save_rate))
+						SCORE_AVG.attrs["game_num"] += 1
+						total_summed_score = 0
 						
 					
-				newGame(rand)
-			else: #else, add event to spot DSPOT in d_table
-				"""
-				nscore = SCORE[0] - int(1/((time.perf_counter()-timeAlive) / 1000.0))
-				if nscore < 0:
-					nscore = 0
-				print(pf[ksend], keyCode[ksend], "Score:", nscore)
-				"""
-				if lscore == SCORE[0]:
-					en_r = 0
+				newGame(rand_mode)
+			else: #else, add event to spot DTABLE_SPOT in d_table
+				if last_score_recorded == SCORE[0]:
+					new_event_reward = 0
 				else:
-					#en_r = SCORE[0] - lscore
-					en_r = SCORE[1]
-					if en_r < 0:
-						en_r = 0
-					lscore = SCORE[0]
+					#new_event_reward = SCORE[0] - last_score_recorded
+					new_event_reward = SCORE[1]
+					if new_event_reward < 0:
+						new_event_reward = 0
+					last_score_recorded = SCORE[0]
 				
-				en_a = ksend
-				np.copyto(D_TABLE_sinit[DSPOT], en_sinit)
-				np.copyto(D_TABLE_snext[DSPOT], en_snext)
-				D_TABLE_r[DSPOT] = en_r
-				D_TABLE_a[DSPOT] = en_a
+				new_event_action = new_keypress
+				np.copyto(DTABLE_initState[DTABLE_SPOT], new_event_screens_current)
+				np.copyto(DTABLE_nextState[DTABLE_SPOT], new_event_screens_next)
+				DTABLE_reward[DTABLE_SPOT] = new_event_reward
+				DTABLE_action[DTABLE_SPOT] = new_event_action
 				
-				DSPOT = (DSPOT + 1) % DLEN #change DSPOT
-				D_TABLE_sinit.attrs["dspot"] = DSPOT
+				DTABLE_SPOT = (DTABLE_SPOT + 1) % DTABLE_LEN #change DTABLE_SPOT
+				DTABLE_initState.attrs["dspot"] = DTABLE_SPOT
 
 		else:
-			#timeAlive = time.perf_counter()
-			lkey = -1
-			if not rand:
-				SCORE_AVG[numGames] = SCORE[0]
-				numGames += 1
+			last_keypress_sent = -1
+			if not rand_mode:
+				SCORE_AVG[num_summed_games] = SCORE[0]
+				num_summed_games += 1
 				
-				numGames += 1
-				totScore += SCORE[0]
-				if numGames % avgSaveRate == 0:
-					SCORE_AVG[GAME_NUM] = totScore/avgSaveRate
-					print("Average Score over last", avgSaveRate, "games:", (totScore/avgSaveRate))
-					GAME_NUM = GAME_NUM + 1
-					totScore = 0
+				num_summed_games += 1
+				total_summed_score += SCORE[0]
+				if num_summed_games % score_save_rate == 0:
+					SCORE_AVG[SCORE_AVG.attrs["game_num"]] = total_summed_score/score_save_rate
+					print("Average Score over last", score_save_rate, "games:", (total_summed_score/score_save_rate))
+					SCORE_AVG.attrs["game_num"] += 1
+					total_summed_score = 0
 				
-			newGame(rand)
+			newGame(rand_mode)
 
 def renderConvNet():
-	sess = tf.Session()
-	init = tf.global_variables_initializer().run(session=sess)
+	session = tf.Session()
+	init_Qnet = tf.global_variables_initializer().run(session=session)
 
-	cdir = os.path.dirname(os.path.realpath(__file__))
-	tf.train.Saver().restore(sess, cdir+"\..\data\luft.ckpt") #one time load of previous net
+	current_dir = os.path.dirname(os.path.realpath(__file__))
+	tf.train.Saver().restore(session, current_dir+"\..\data\luft.ckpt") #one time load of previous net
 	print("Loaded tensorflow net")
 
 
 
 luft_util = CDLL("cpp/luft_util.dll") #load luft_util dll
-getPix = luft_util.getPix
-getPix.restype = c_ulonglong #set getpix return type to avoid seg faults
+get_pixels = luft_util.getPix
+get_pixels.restype = c_ulonglong #set getpix return type to avoid seg faults
 
 luft_util.init() #init, very important
-pixLen = luft_util.getPLen() #get image data
+total_pixel_count = luft_util.getPLen() #get image data
 img_h = luft_util.getH()
 img_w = luft_util.getW()
-nimg_h = int(img_h/SHRINK) #adjust data
-nimg_w = int(img_w/SHRINK)
+img_h_small = int(img_h/SHRINK_VAL) #adjust data
+img_w_small = int(img_w/SHRINK_VAL)
 
-if expConvNet:
+if export_conv_net:
 	print("Exp Conv Net Init")
 	renderConvNet()
 	raise SystemExit
 
-if hdinit:
+if h5py_init:
 	H5FILE = h5py.File("data/d_table.hdf5", "w-")
-	H5FILE.create_dataset("dtable/sinit", (DLEN, nimg_w, nimg_h, 4), dtype="i8", chunks=True, compression="lzf", shuffle=True)
-	H5FILE.create_dataset("dtable/snext", (DLEN, nimg_w, nimg_h, 4), dtype="i8", chunks=True, compression="lzf", shuffle=True)
-	H5FILE.create_dataset("dtable/r", (DLEN,), dtype="i", chunks=True, compression="lzf", shuffle=True)
-	H5FILE.create_dataset("dtable/a", (DLEN,), dtype="i", chunks=True, compression="lzf", shuffle=True)
+	H5FILE.create_dataset("dtable/sinit", (DTABLE_LEN, img_w_small, img_h_small, 4), dtype="i8", chunks=True, compression="lzf", shuffle=True)
+	H5FILE.create_dataset("dtable/snext", (DTABLE_LEN, img_w_small, img_h_small, 4), dtype="i8", chunks=True, compression="lzf", shuffle=True)
+	H5FILE.create_dataset("dtable/r", (DTABLE_LEN,), dtype="i", chunks=True, compression="lzf", shuffle=True)
+	H5FILE.create_dataset("dtable/a", (DTABLE_LEN,), dtype="i", chunks=True, compression="lzf", shuffle=True)
 	H5FILE.create_dataset("avg", (2000000,), dtype="i", chunks=True, compression="lzf", shuffle=True)
 	H5FILE["dtable"]["sinit"].attrs["dspot"] = 0
 	H5FILE["avg"].attrs["game_num"] = 0
-else: 	
-	H5FILE = h5py.File("data/d_table.hdf5", "r+")
-	D_TABLE_sinit = H5FILE["dtable"]["sinit"]
-	D_TABLE_snext = H5FILE["dtable"]["snext"]
-	D_TABLE_r = H5FILE["dtable"]["r"]
-	D_TABLE_a = H5FILE["dtable"]["a"]
-	SCORE_AVG = H5FILE["avg"]
-	DSPOT = D_TABLE_sinit.attrs["dspot"]
-	GAME_NUM = H5FILE["avg"].attrs["game_num"]
-	print("Loaded hdf5 file, DSPOT:", DSPOT, "GAME_NUM:", GAME_NUM)
+	raise SystemExit
 
+H5FILE = h5py.File("data/d_table.hdf5", "r+")
+DTABLE_initState = H5FILE["dtable"]["sinit"]
+DTABLE_nextState = H5FILE["dtable"]["snext"]
+DTABLE_reward = H5FILE["dtable"]["r"]
+DTABLE_action = H5FILE["dtable"]["a"]
+SCORE_AVG = H5FILE["avg"]
+DTABLE_SPOT = DTABLE_initState.attrs["dspot"]
+#GAME_NUM = SCORE_AVG.attrs["game_num"]
+SCORE_AVG.attrs["game_num"] = 0
+print("Loaded hdf5 file, DTABLE_SPOT:", DTABLE_SPOT, "GAME_NUM:", SCORE_AVG.attrs["game_num"])
 
-	runConvNet(pixLen, nimg_w, nimg_h, l_rate, makeDTable) #start training
+runConvNet(img_w_small, img_h_small, l_rate, random_training) #start training
 
 luft_util.closePMem() #free memory in luft_util
 H5FILE.close()

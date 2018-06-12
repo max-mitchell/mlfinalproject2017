@@ -1,91 +1,71 @@
 from ctypes import *
-from ctypes.wintypes import *
-import win32ui, win32process
-import base64
-import pdb
+import numpy as np #I'll refer to numpy as np and tensorflow as tf
+import h5py
+import struct
+import os
+import time
 
-class MODULEENTRY32(Structure):
-       _fields_ = [ ( 'dwSize' , DWORD ) , 
-                ( 'th32ModuleID' , DWORD ),
-                ( 'th32ProcessID' , DWORD ),
-                ( 'GlblcntUsage' , DWORD ),
-                ( 'ProccntUsage' , DWORD ) ,
-                ( 'modBaseAddr' , POINTER(DWORD)) ,
-                ( 'modBaseSize' , DWORD ) , 
-                ( 'hModule' , HMODULE ) ,
-                ( 'szModule' , c_char * 256 ),
-                ( 'szExePath' , c_char * 260 ) ]
+SHRINK = 2 #how much to shrink the image cap
+DEAD_VAL = 81 #screen color when dead
+IS_DEAD = False #if AI is dead
 
-def carrToHex(arr):
-	hTmp = [h for h in arr]
-	p = 0
-	hOut = 0
-	for h in hTmp:
-		hOut += h*(16**p)
-		p += 2
-	return hOut
+def getImgData(plen, nw, nh, plist, pspot): #gets pixel data from luft_util
+	global IS_DEAD
+	pix_ptr = cast(getPix(SHRINK), POINTER(c_char)) #actual method call
+
+	for i in range(nh*nw): #unpack each pixel and add it to np arr
+		plist[i][pspot] = struct.unpack('B', pix_ptr[i])[0]
 
 
-OpenProcess = windll.kernel32.OpenProcess
-ReadProcessMemory = windll.kernel32.ReadProcessMemory
-GetModuleHandleW = windll.kernel32.GetModuleHandleW
+	IS_DEAD = True
+	for i in range(50,250,4): #check if screen is dead screen
+		if plist[i^2][pspot] != DEAD_VAL:
+			IS_DEAD = False
 
+luft_util = CDLL("cpp/luft_util.dll") #load luft_util dll
+getPix = luft_util.getPix
+getPix.restype = c_ulonglong #set getpix return type to avoid seg faults
 
-SCORE1 = 0x6aca90
-SCORE2 = 0x138
-rdScore = ctypes.sizeof(DWORD)
+luft_util.init() #init, very important
+pixLen = luft_util.getPLen() #get image data
+img_h = luft_util.getH()
+img_w = luft_util.getW()
+nimg_h = int(img_h/SHRINK) #adjust data
+nimg_w = int(img_w/SHRINK)
 
-PROCESS_VM_READ = 0x0010
-PROCESS_ALL_ACCESS = 0x1F0FFF
+H5FILE = h5py.File("data/d_table.hdf5", "r+")
+SCORE_AVG = H5FILE["avg"]
+GAME_NUM = SCORE_AVG.attrs["game_num"]
+print("Loaded hdf5 file ", "GAME_NUM:", SCORE_AVG.attrs["game_num"], " w:", nimg_w, " h:", nimg_h)
 
-TH32CS_SNAPMODULE = 0x00000008
+time.sleep(2)
 
-mtry = 0x0b03cde4
+luft_util.sendKey(2) #start first game
+time.sleep(.1)
+luft_util.sendKey(6)
+time.sleep(.2)
 
-#pdb.set_trace()
+luft_util.sendKey(0)
 
-try:
-	pWindow = win32ui.FindWindow(None, u"LUFTRAUSERS").GetSafeHwnd()
-except win32ui.error:
-	print("Luftrausers not open")
-	exit(1)
+print("Starting loop")
+while True:
+	plist = np.zeros((nimg_h*nimg_w, 1), dtype=np.int8)
+	getImgData(pixLen, nimg_w, nimg_h, plist, 0)
 
-baseMem = c_uint();
-pid = win32process.GetWindowThreadProcessId(pWindow)[1]
-snapshot = windll.kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid)
-module = MODULEENTRY32()
-module.dwSize = ctypes.sizeof(MODULEENTRY32)
-if windll.kernel32.Module32First(snapshot, byref(module)):
-	print("Read process:", module.szModule)
-	baseMem = module.modBaseAddr.contents
-else:
-	print("error", ctypes.GetLastError())
+	if IS_DEAD:
+		SCORE_AVG.attrs["game_num"] += 1
+		print("You died ", SCORE_AVG.attrs["game_num"])
 
-windll.kernel32.CloseHandle(snapshot)
+		for i in range(4, 8):
+			luft_util.sendKey(i)
+		time.sleep(2)
+		luft_util.sendKey(2)
+		time.sleep(.1)
+		luft_util.sendKey(6)
+		time.sleep(1)
+		luft_util.sendKey(2)
+		time.sleep(.1)
+		luft_util.sendKey(6)
+		IS_DEAD = False
 
-print("baseMem:", baseMem)
-
-process = OpenProcess(PROCESS_ALL_ACCESS, False, pid);
-print("PID:", pid)
-if process == 0:
-	print("error", ctypes.GetLastError())
-	exit(1)
-
-buff = create_string_buffer(4)
-buffSize = len(buff)
-bytesRead = c_ulonglong(0)
-
-#print((LPCVOID)(baseMem+SCORE1))
-
-if ReadProcessMemory(process, baseMem+SCORE1, buff, buffSize, byref(bytesRead)):
-	mInit = carrToHex(buff.raw)
-	print("Read", bytesRead.value, "bytes of memory:", mInit)
-else:
-	print("error", ctypes.GetLastError())
-
-if ReadProcessMemory(process, (LPCVOID)(mInit+SCORE2), buff, buffSize, byref(bytesRead)):
-	mSco = carrToHex(buff.raw)
-	print("Read", bytesRead.value, "bytes of memory:", mSco)
-
-
-
+		luft_util.sendKey(0)

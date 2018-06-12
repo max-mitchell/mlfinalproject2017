@@ -6,6 +6,7 @@ import h5py
 import os
 import random
 import time
+import datetime
 from memory_profiler import profile
 import sys
 
@@ -28,6 +29,8 @@ l_rate = .00005 #learning rate
 rand_move_chance = .1
 
 score_save_rate = 5
+
+main_loop_count = 55001
 
 key_code = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
@@ -86,6 +89,9 @@ def makeConvLayer(p_data, channel_n, filter_n, filter_s, pool_s, stride_n): #mak
 def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python code
 	global DTABLE_SPOT
 	global rand_move_chance
+	program_start_time = datetime.datetime.now()
+
+
 	image_layer = tf.placeholder(tf.float32, [1, w_small, h_small, 4]) #actual image
 
 	last_action_layer = tf.placeholder(tf.float32, [8]) #stores which action was taken last time
@@ -131,7 +137,7 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 	last_score_recorded = 0
 	total_summed_score = 0
 	num_summed_games = 0
-	for i in range(55000+1): #LEARN THE GAME FOR A WHILE
+	for i in range(main_loop_count): #LEARN THE GAME FOR A WHILE
 		print("Step:", i, end="\r")
 
 		if not rand_mode: #if not making a new d_tablwxe, train
@@ -235,6 +241,8 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 					total_summed_score = 0
 				
 			newGame(rand_mode)
+	program_running_time = datetime.datetime.now() - program_start_time
+	print(program_running_time)
 
 def renderConvNet():
 	session = tf.Session()
@@ -283,6 +291,7 @@ DTABLE_SPOT = DTABLE_initState.attrs["dspot"]
 #GAME_NUM = SCORE_AVG.attrs["game_num"]
 SCORE_AVG.attrs["game_num"] = 0
 print("Loaded hdf5 file, DTABLE_SPOT:", DTABLE_SPOT, "GAME_NUM:", SCORE_AVG.attrs["game_num"])
+
 
 runConvNet(img_w_small, img_h_small, l_rate, random_training) #start training
 

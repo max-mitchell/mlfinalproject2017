@@ -37,7 +37,9 @@ extern "C" { //means it's good for any version of c
 
     BYTE *NDATA; //array to hold processed pixel values
 
-    void init() { //init function
+    int SHRINK = 2; //global shrink value
+
+    void init(int shrink) { //init function
         WINDOW = FindWindowA(0, _T("LUFTRAUSERS")); //get window handle
         if(WINDOW == 0 ){ 
             printf("Window not found!\n"); 
@@ -66,6 +68,12 @@ extern "C" { //means it's good for any version of c
         keybrd.type = INPUT_KEYBOARD; //set up keyboard interface
         keybrd.ki.time = 0;
         keybrd.ki.dwExtraInfo = 0;
+
+        SHRINK = shrink;
+
+        int nw = MAX_WIDTH/SHRINK;
+        int nh = MAX_HEIGHT/SHRINK;
+        NDATA = new BYTE[nw*nh]; //set up global pixel array
     }
 
     int getPLen() { //return len of full pixel array
@@ -80,7 +88,7 @@ extern "C" { //means it's good for any version of c
         return MAX_WIDTH;
     }
 
-    BYTE *getPix(int shrink) { //get pixels from Luftrausers screen
+    BYTE *getPix() { //get pixels from Luftrausers screen
         HDC dc = GetDC(WINDOW); //get dc object
         HDC dcTmp = CreateCompatibleDC(dc); //not sure what this line does
         
@@ -103,19 +111,18 @@ extern "C" { //means it's good for any version of c
             printf("Get Pixels Error: %d\n", GetLastError());
             exit(1);
         }
-  
-        int nw = MAX_WIDTH/shrink;
-        int nh = MAX_HEIGHT/shrink;
-        NDATA = new BYTE[nw*nh]; //set up new pixel array
+
+        int nw = MAX_WIDTH/SHRINK;
+        int nh = MAX_HEIGHT/SHRINK;
         int g = 0;
-        for (int i = 0; i < MAX_WIDTH*MAX_HEIGHT*PIX_DEPTH/shrink; i += PIX_DEPTH) { //convert RGBA values to grayscale, and limit length to nw*nh
+        for (int i = 0; i < MAX_WIDTH*MAX_HEIGHT*PIX_DEPTH/SHRINK; i += PIX_DEPTH) { //convert RGBA values to grayscale, and limit length to nw*nh
             if (g >= nw*nh) {
                 break;
             }
-            NDATA[g] = 0.3*data[i*shrink] + 0.59*data[i*shrink+1] + 0.11*data[i*shrink+2];
+            NDATA[g] = 0.3*data[i*SHRINK] + 0.59*data[i*SHRINK+1] + 0.11*data[i*SHRINK+2];
             g++;
             if ((i/PIX_DEPTH) % MAX_WIDTH == 0) {
-                i += MAX_WIDTH * PIX_DEPTH * (shrink - 1);
+                i += MAX_WIDTH * PIX_DEPTH * (SHRINK - 1);
             }
         }
 	    //InvalidateRect(WINDOW, &rect, 1);
@@ -190,15 +197,20 @@ extern "C" { //means it's good for any version of c
     }
 
     int main() { //for testing purposes
-        init();
-        int *score = new int[2];
-        for (int i = 0; i < 5000; i++) {
+        init(2);
+        /*for (int i = 0; i < 5000; i++) {
+            int *score = new int[2];
             readGameMem(score);
-            getPix(2);
+            delete [] score;
+        }*/
+        for (int i = 0; i < 10000; i++) {
+            getPix();
+        }
+        /*for (int i = 0; i < 5000; i++) {
             sendKey(0);
             sendKey(4);
-        }
-        delete [] score;
+        }*/
+        
         closePMem();
         exit(0);
     }

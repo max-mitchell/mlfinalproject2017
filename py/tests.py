@@ -11,7 +11,7 @@ IS_DEAD = False #if AI is dead
 
 def getImgData(plen, nw, nh, plist, pspot): #gets pixel data from luft_util
 	global IS_DEAD
-	pix_ptr = cast(getPix(SHRINK), POINTER(c_char)) #actual method call
+	pix_ptr = cast(getPix(), POINTER(c_char)) #actual method call
 
 	for i in range(nh*nw): #unpack each pixel and add it to np arr
 		plist[i][pspot] = struct.unpack('B', pix_ptr[i])[0]
@@ -26,7 +26,7 @@ luft_util = CDLL("cpp/luft_util.dll") #load luft_util dll
 getPix = luft_util.getPix
 getPix.restype = c_ulonglong #set getpix return type to avoid seg faults
 
-luft_util.init() #init, very important
+luft_util.init(SHRINK) #init, very important
 pixLen = luft_util.getPLen() #get image data
 img_h = luft_util.getH()
 img_w = luft_util.getW()

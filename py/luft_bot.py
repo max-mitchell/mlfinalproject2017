@@ -18,25 +18,25 @@ h5py_init = False
 random_training = True #IMPORTANT whether or not to create new d_table
 export_conv_net = False
 
-DTABLE_LEN = 500000 #d_table len, Maxlen=500000, don't go above this
+DTABLE_LEN = 1500000 #d_table len
 DTABLE_SPOT = 0 #spot to replace when adding event to d_table
 
 score_arr = c_int32 * 2
 SCORE = score_arr(0, 0) #ctypes arr for score and mult variables
 
-l_rate = .00005 #learning rate
+l_rate = .0005 #learning rate
 
 rand_move_chance = .1
 
 score_save_rate = 5
 
-main_loop_count = 55001
+main_loop_count = 500000
 
 key_code = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
 def getImgData(w_small, h_small, p_list, p_spot): #gets pixel data from luft_util
 	global IS_DEAD
-	pix_ptr = cast(get_pixels(SHRINK_VAL), POINTER(c_char)) #actual method call
+	pix_ptr = cast(get_pixels(), POINTER(c_char)) #actual method call
 
 	for i in range(h_small*w_small): #unpack each pixel and add it to np arr
 		p_list[i][p_spot] = struct.unpack('B', pix_ptr[i])[0]
@@ -258,7 +258,7 @@ luft_util = CDLL("cpp/luft_util.dll") #load luft_util dll
 get_pixels = luft_util.getPix
 get_pixels.restype = c_ulonglong #set getpix return type to avoid seg faults
 
-luft_util.init() #init, very important
+luft_util.init(SHRINK_VAL) #init, very important
 total_pixel_count = luft_util.getPLen() #get image data
 img_h = luft_util.getH()
 img_w = luft_util.getW()

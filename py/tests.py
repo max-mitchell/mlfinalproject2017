@@ -17,10 +17,27 @@ def getImgData(plen, nw, nh, plist, pspot): #gets pixel data from luft_util
 		plist[i][pspot] = struct.unpack('B', pix_ptr[i])[0]
 
 
+	
 	IS_DEAD = True
 	for i in range(50,250,4): #check if screen is dead screen
 		if plist[i^2][pspot] != DEAD_VAL:
 			IS_DEAD = False
+
+
+def getImgDataOld(plen, nw, nh, plist, pspot): #gets pixel data from luft_util
+	global IS_DEAD
+	pix_ptr = cast(getPix(), POINTER(c_char)) #actual method call
+
+	for i in range(nh*nw): #unpack each pixel and add it to np arr
+		plist[i][pspot] = struct.unpack('B', pix_ptr[i])[0]
+
+
+	
+	IS_DEAD = True
+	for i in plist[30000:30050][pspot]: #check if screen is dead screen
+		if i != DEAD_VAL:
+			IS_DEAD = False
+	
 
 luft_util = CDLL("cpp/luft_util.dll") #load luft_util dll
 getPix = luft_util.getPix
@@ -50,8 +67,19 @@ luft_util.sendKey(0)
 print("Starting loop")
 while True:
 	plist = np.zeros((nimg_h*nimg_w, 1), dtype=np.int8)
-	getImgData(pixLen, nimg_w, nimg_h, plist, 0)
+	t1 = time.time()
+	for i in range(100):
+		getImgData(pixLen, nimg_w, nimg_h, plist, 0)
+	t2 = time.time()
+	print((t2 - t1)/100.0, " New")
 
+	t1 = time.time()
+	for i in range(100):
+		getImgDataOld(pixLen, nimg_w, nimg_h, plist, 0)
+	t2 = time.time()
+	print((t2 - t1)/100.0, " Old")
+
+	'''
 	if IS_DEAD:
 		SCORE_AVG.attrs["game_num"] += 1
 		print("You died ", SCORE_AVG.attrs["game_num"])
@@ -69,3 +97,4 @@ while True:
 		IS_DEAD = False
 
 		luft_util.sendKey(0)
+	'''

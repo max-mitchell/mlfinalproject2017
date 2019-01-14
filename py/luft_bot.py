@@ -24,13 +24,15 @@ DTABLE_SPOT = 0 #spot to replace when adding event to d_table
 score_arr = c_int32 * 2
 SCORE = score_arr(0, 0) #ctypes arr for score and mult variables
 
-l_rate = .0005 #learning rate
+l_rate = .00005 #learning rate
 
-rand_move_chance = .1
+rand_move_chance = .01
 
 score_save_rate = 5
 
-main_loop_count = 500000
+main_loop_count = 1000000
+
+prev_events_num = 12
 
 key_code = ["FIRE  ON", "Left  ON", "Up  ON", "Right  ON", "FIRE Off", "Left Off", "Up Off", "Right Off"]
 
@@ -49,7 +51,7 @@ def getImgData(w_small, h_small, p_list, p_spot): #gets pixel data from luft_uti
 
 
 
-def getShortList(l_len): #uses a resevoir picker to get l_len items from the d_table
+def getShortList(l_len): #uses a resevoir picker to get l_len items from the d_table, old
 	s_list = []
 	for i in range(DTABLE_SPOT):
 		if i < l_len:
@@ -123,9 +125,9 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 	session = tf.Session()
 	init_Qnet = tf.global_variables_initializer().run(session=session)
 
-	#current_dir = os.path.dirname(os.path.realpath(__file__))
-	#saver.restore(session, current_dir+"\..\data\luft.ckpt") #one time load of previous net
-	#print("Loaded tensorflow net")
+	current_dir = os.path.dirname(os.path.realpath(__file__))
+	saver.restore(session, current_dir+"\..\data\luft.ckpt") #one time load of previous net
+	print("Loaded tensorflow net")
 
 	luft_util.sendKey(2) #start first game
 	time.sleep(.1)
@@ -137,7 +139,9 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 	last_score_recorded = 0
 	total_summed_score = 0
 	num_summed_games = 0
+	num_games_stored = SCORE_AVG.attrs["game_num"]
 	for i in range(main_loop_count): #LEARN THE GAME FOR A WHILE
+		#t1 = time.time()
 		print("Step:", i, end="\r")
 
 		if not rand_mode: #if not making a new d_tablwxe, train
@@ -146,7 +150,7 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 				saver.save(session, current_dir+"\..\data\luft.ckpt")
 				print("Saved net on step", i)
 
-			event_list = getShortList(4) #get events from d_table
+			event_list = np.random.randint(0, high=DTABLE_SPOT, size=prev_events_num) #gets prev_events_num random events
 
 			for event in event_list: #train on every event in event_list
 				init_Qnet_out = session.run(out_final_layer, feed_dict={image_layer: [DTABLE_nextState[event]]})[0] #run init_Qnet screens through
@@ -156,6 +160,7 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 				action_suggested = [0] * 8
 				action_suggested[action_taken] = 1 #make a last_action_layer of 0s except a 1 where the max of init_Qnet_out was
 				session.run(trainer, feed_dict={image_layer: [DTABLE_initState[event]], current_score_layer: [DTABLE_reward[event]], last_action_layer: action_suggested, last_four_screens_out: init_Qnet_max}) #finish training and update the weights
+			print(init_Qnet_out)
 
 
 		new_event_screens_current = np.zeros((h_small*w_small, 4), dtype=np.int8) #after training, make a new event
@@ -165,6 +170,7 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 			getImgData(w_small, h_small, new_event_screens_current, i)
 			if IS_DEAD: #check if the AI died
 				break;
+			time.sleep(.06)
 		if not IS_DEAD:
 			new_event_screens_next = np.copy(new_event_screens_current)
 			new_event_screens_current = np.reshape(new_event_screens_current, (w_small, h_small, 4))
@@ -181,7 +187,7 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 						luft_util.sendKey(int(new_keypress)) #send the chosen key stroke and see what happens
 						last_keypress_sent = new_keypress
 					if rand_move_chance > .0001:
-						rand_move_chance -= .0001
+						rand_move_chance -= .001
 			else: #else, set randomly
 				new_keypress = random.randint(0, 7)
 				if new_keypress != last_keypress_sent:
@@ -194,29 +200,29 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 			if IS_DEAD: #if AI died, don't add new event
 				last_keypress_sent = -1
 				if not rand_mode:
-					SCORE_AVG[num_summed_games] = SCORE[0]
-					num_summed_games += 1
-					
 					num_summed_games += 1
 					total_summed_score += SCORE[0]
 					if num_summed_games % score_save_rate == 0:
-						SCORE_AVG[num_summed_games] = total_summed_score/score_save_rate
+						SCORE_AVG[num_games_stored] = total_summed_score/score_save_rate
 						print("Average Score over last", score_save_rate, "games:", (total_summed_score/score_save_rate))
 						SCORE_AVG.attrs["game_num"] += 1
 						total_summed_score = 0
+						num_games_stored += 1
 						
 					
 				newGame(rand_mode)
 			else: #else, add event to spot DTABLE_SPOT in d_table
+				'''
 				if last_score_recorded == SCORE[0]:
 					new_event_reward = 0
 				else:
-					#new_event_reward = SCORE[0] - last_score_recorded
-					new_event_reward = SCORE[1]
+					new_event_reward = SCORE[0] - last_score_recorded
 					if new_event_reward < 0:
 						new_event_reward = 0
 					last_score_recorded = SCORE[0]
-				
+				'''
+
+				new_event_reward = SCORE[1] + (SCORE[0] / 50) #use mult as score, plus a small part of real score
 				new_event_action = new_keypress
 				np.copyto(DTABLE_initState[DTABLE_SPOT], new_event_screens_current)
 				np.copyto(DTABLE_nextState[DTABLE_SPOT], new_event_screens_next)
@@ -229,18 +235,18 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 		else:
 			last_keypress_sent = -1
 			if not rand_mode:
-				SCORE_AVG[num_summed_games] = SCORE[0]
-				num_summed_games += 1
-				
 				num_summed_games += 1
 				total_summed_score += SCORE[0]
 				if num_summed_games % score_save_rate == 0:
-					SCORE_AVG[SCORE_AVG.attrs["game_num"]] = total_summed_score/score_save_rate
+					SCORE_AVG[num_games_stored] = total_summed_score/score_save_rate
 					print("Average Score over last", score_save_rate, "games:", (total_summed_score/score_save_rate))
 					SCORE_AVG.attrs["game_num"] += 1
 					total_summed_score = 0
+					num_games_stored += 1
 				
 			newGame(rand_mode)
+		#t2 = time.time()
+		#print(t2-t1, " per loop")
 	program_running_time = datetime.datetime.now() - program_start_time
 	print(program_running_time)
 
@@ -288,8 +294,6 @@ DTABLE_reward = H5FILE["dtable"]["r"]
 DTABLE_action = H5FILE["dtable"]["a"]
 SCORE_AVG = H5FILE["avg"]
 DTABLE_SPOT = DTABLE_initState.attrs["dspot"]
-#GAME_NUM = SCORE_AVG.attrs["game_num"]
-SCORE_AVG.attrs["game_num"] = 0
 print("Loaded hdf5 file, DTABLE_SPOT:", DTABLE_SPOT, "GAME_NUM:", SCORE_AVG.attrs["game_num"])
 
 

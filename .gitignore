@@ -7,3 +7,5 @@
 *.npy
 *.ilk
 *.pdb
+
+env/

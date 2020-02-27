@@ -1,13 +1,15 @@
 from ctypes import *
 import numpy as np #I'll refer to numpy as np and tensorflow as tf
 import struct
-import tensorflow as tf
+
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior() 
+
 import h5py
 import os
 import random
 import time
 import datetime
-from memory_profiler import profile
 import sys
 
 SHRINK_VAL = 2 #how much to shrink the image cap
@@ -15,7 +17,7 @@ DEAD_VAL = 81 #screen color when dead
 IS_DEAD = False #if AI is dead
 
 h5py_init = False
-random_training = False #IMPORTANT whether or not to create new d_table
+random_training = True #IMPORTANT whether or not to create new d_table
 export_conv_net = False
 
 DTABLE_LEN = 1500000 #d_table len
@@ -115,7 +117,7 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 	out_final_layer = tf.matmul(dense_out, weight_out) + bias_out
 	out_final_layer = tf.nn.relu(out_final_layer) #get actions probs for the controlls
 
-	cost = (current_score_layer * last_action_layer + last_four_screens_out * last_action_layer - np.amax(out_final_layer) * last_action_layer) ** 2 #make cost
+	cost = (current_score_layer * last_action_layer + last_four_screens_out * last_action_layer - tf.reduce_max(out_final_layer) * last_action_layer) ** 2 #make cost
 	trainer = tf.train.AdamOptimizer(learn_rate).minimize(cost) #minimize cost
 
 	saver = tf.train.Saver() #makes saver so we can save our net!
@@ -139,7 +141,7 @@ def runConvNet(w_small, h_small, learn_rate, rand_mode): #the bulk of the python
 	num_summed_games = 0
 	num_games_stored = SCORE_AVG.attrs["game_num"]
 	for i in range(main_loop_count): #LEARN THE GAME FOR A WHILE
-		print("Step:", i, end="\r")
+		print("Step:", i)
 
 		if not rand_mode: #if not making a new d_tablwxe, train
 

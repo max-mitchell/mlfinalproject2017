@@ -15,6 +15,7 @@ extern "C" {
 	LUFTUTIL_EXPORT int getH(void);
 	LUFTUTIL_EXPORT int getW(void);
 	LUFTUTIL_EXPORT BYTE *getPix(void);
+	LUFTUTIL_EXPORT void getPixNew(BYTE *ndata);
 	LUFTUTIL_EXPORT void readGameMem(int *rtrn);
 	LUFTUTIL_EXPORT void sendKey(int action);
 	LUFTUTIL_EXPORT void closePMem(void);

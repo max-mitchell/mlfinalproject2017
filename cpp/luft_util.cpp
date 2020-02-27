@@ -16,7 +16,6 @@ extern "C" { //means it's good for any version of c
     HWND WINDOW; //handle to the Luftrausers window
     HANDLE PROCESS; //handle to the Luftrausers process
 
-    INPUT keybrd; //struct for sending keystrokes
     WORD FIRE_KEY = 0x58; //key codes for X,
     WORD LEFT_KEY = 0x41; //A
     WORD UP_KEY = 0x57; //W
@@ -64,10 +63,6 @@ extern "C" { //means it's good for any version of c
         BASE_ADDR = ModuleEntry32.modBaseAddr; //find base addr from snapshot
 
         CloseHandle(hSnapshot); //free snapshot
-
-        keybrd.type = INPUT_KEYBOARD; //set up keyboard interface
-        keybrd.ki.time = 0;
-        keybrd.ki.dwExtraInfo = 0;
 
         SHRINK = shrink;
 
@@ -134,6 +129,51 @@ extern "C" { //means it's good for any version of c
         return NDATA;
     }
 
+    void getPixNew(BYTE *ndata) { //get pixels from Luftrausers screen
+        HDC dc = GetDC(WINDOW); //get dc object
+        HDC dcTmp = CreateCompatibleDC(dc); //not sure what this line does
+        
+
+        int iBpi= GetDeviceCaps(dcTmp, BITSPIXEL); //get pixel depth, I hardcoded in a 4 but really I shouldn't have
+        BITMAPINFO bitmap;
+        bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER); //give the bitmap the specs of our image
+        bitmap.bmiHeader.biWidth = MAX_WIDTH;
+        bitmap.bmiHeader.biHeight = -MAX_HEIGHT;
+        bitmap.bmiHeader.biPlanes = 1;
+        bitmap.bmiHeader.biBitCount  = iBpi;
+        bitmap.bmiHeader.biCompression = BI_RGB;
+
+
+        BYTE *data = NULL;
+        HBITMAP hBitmap = CreateDIBSection(dcTmp, &bitmap, DIB_RGB_COLORS, (void**)&data, NULL, NULL); //set up pixel capture
+        HGDIOBJ pbitmap = SelectObject(dcTmp, hBitmap);
+        BitBlt(dcTmp, 0, 0, MAX_WIDTH, MAX_HEIGHT, dc , 0, 0, SRCCOPY); //get pixel data
+        if (data == NULL) {
+            printf("Get Pixels Error: %d\n", GetLastError());
+            exit(1);
+        }
+
+        int nw = MAX_WIDTH/SHRINK;
+        int nh = MAX_HEIGHT/SHRINK;
+        int g = 0;
+        for (int i = 0; i < MAX_WIDTH*MAX_HEIGHT*PIX_DEPTH/SHRINK; i += PIX_DEPTH) { //convert RGBA values to grayscale, and limit length to nw*nh
+            if (g >= nw*nh) {
+                break;
+            }
+            ndata[g] = 0.3*data[i*SHRINK] + 0.59*data[i*SHRINK+1] + 0.11*data[i*SHRINK+2];
+            g++;
+            if ((i/PIX_DEPTH) % MAX_WIDTH == 0) {
+                i += MAX_WIDTH * PIX_DEPTH * (SHRINK - 1);
+            }
+        }
+	    //InvalidateRect(WINDOW, &rect, 1);
+      	ReleaseDC(WINDOW, dc); //free dc
+        SelectObject(dcTmp, pbitmap);
+        DeleteDC(dcTmp);
+        DeleteObject(pbitmap);
+        DeleteObject(hBitmap);
+    }
+
     void readGameMem(int *rtrn) { //get score and mult variables
         int score;
         int mult;
@@ -158,34 +198,32 @@ extern "C" { //means it's good for any version of c
 
     void sendKey(int action) { //send key
         if (action < 4) { //if <4, it's a press
-            keybrd.ki.dwFlags = KEYEVENTF_SCANCODE;
             if (action == 0) {
-                keybrd.ki.wScan = MapVirtualKey(FIRE_KEY, MAPVK_VK_TO_VSC); //use a scancode not a raw value because Luftrauses doesn't see the keyboard the same way cpp does I guess
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(FIRE_KEY, 0) << 16);
+                SendMessage(WINDOW, WM_KEYDOWN, FIRE_KEY, lparam);
             } else if (action == 1) {
-                keybrd.ki.wScan = MapVirtualKey(LEFT_KEY, MAPVK_VK_TO_VSC);
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(LEFT_KEY, 0) << 16);
+                SendMessage(WINDOW, WM_KEYDOWN, LEFT_KEY, lparam);
             } else if (action == 2) {
-                keybrd.ki.wScan = MapVirtualKey(UP_KEY, MAPVK_VK_TO_VSC);
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(UP_KEY, 0) << 16);
+                SendMessage(WINDOW, WM_KEYDOWN, UP_KEY, lparam);
             } else if (action == 3) {
-                keybrd.ki.wScan = MapVirtualKey(RIGHT_KEY, MAPVK_VK_TO_VSC);
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(RIGHT_KEY, 0) << 16);
+                SendMessage(WINDOW, WM_KEYDOWN, RIGHT_KEY, lparam);
             }
         } else { //if >=4, it's a release
-            keybrd.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
             if (action == 4) {
-                keybrd.ki.wScan = MapVirtualKey(FIRE_KEY, MAPVK_VK_TO_VSC);
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(FIRE_KEY, 0) << 16) | 0xC00000000;
+                SendMessage(WINDOW, WM_KEYUP, FIRE_KEY, lparam);
             } else if (action == 5) {
-                keybrd.ki.wScan = MapVirtualKey(LEFT_KEY, MAPVK_VK_TO_VSC);
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(LEFT_KEY, 0) << 16) | 0xC00000000;
+                SendMessage(WINDOW, WM_KEYUP, LEFT_KEY, lparam);
             } else if (action == 6) {
-                keybrd.ki.wScan = MapVirtualKey(UP_KEY, MAPVK_VK_TO_VSC);
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(UP_KEY, 0) << 16) | 0xC00000000;
+                SendMessage(WINDOW, WM_KEYUP, UP_KEY, lparam);
             } else if (action == 7) {
-                keybrd.ki.wScan = MapVirtualKey(RIGHT_KEY, MAPVK_VK_TO_VSC);
-                SendInput(1, &keybrd, sizeof(INPUT));
+                uint32_t lparam = 1 | (MapVirtualKey(RIGHT_KEY, 0) << 16) | 0xC00000000;
+                SendMessage(WINDOW, WM_KEYUP, RIGHT_KEY, lparam);
             }
         }
         //printf("Sent key %d with error %d\n", action, GetLastError());

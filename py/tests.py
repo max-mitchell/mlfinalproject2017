@@ -102,7 +102,7 @@ a0 = np.reshape(arr[0], (nimg_h, nimg_w))
 a1 = np.reshape(arr[1], (nimg_h, nimg_w))
 a2 = np.reshape(arr[2], (nimg_h, nimg_w))
 a3 = np.reshape(arr[3], (nimg_h, nimg_w))
-arr = np.dstack((a0,a1,a2,a3))
+arr = np.dstack([np.reshape(arr[i], (nimg_h, nimg_w)) for i in range(4)])
 
 Image.fromarray(arr[:,:,0], "L").show()
 Image.fromarray(arr[:,:,1], "L").show()

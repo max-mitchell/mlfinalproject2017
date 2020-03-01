@@ -310,11 +310,8 @@ class Luftrauser(object):
 
 
 def main():
-
-    # luft = Luftrauser(h5py_init=True)
-
     # Set up variables
-    luft = Luftrauser()
+    luft = Luftrauser(h5py_init=False)
     gamma = 0.99
     weight_copy_interval = 25
     num_frames = 4
@@ -325,6 +322,8 @@ def main():
     min_experiences = 30000
     prev_events_num = 8
     learning_rate = 0.001
+
+    load_model = True
 
     # Create file logger to track results
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -340,6 +339,15 @@ def main():
                             gamma, dtable, max_experiences, min_experiences,
                             prev_events_num, learning_rate)
 
+
+    # Set up paths to save network
+    train_checkpoint_path = "./data/luft_train.ckpt"
+    target_checkpoint_path = "./data/luft_target.ckpt"
+
+    # Load previous model?
+    if load_model:
+        TrainNet.model.load_weights(train_checkpoint_path)
+        TargetNet.model.load_weights(target_checkpoint_path)
 
     # How many games to play
     N = 50000
@@ -374,6 +382,10 @@ def main():
         if n % 10 == 0:
             print("eppisode:", n, "eppisode reward:", total_reward, "eps:", epsilon, "avg reward (last 5):", avg_rewards)
         
+        # Save weights
+        TrainNet.model.save_weights(train_checkpoint_path)
+        TargetNet.model.save_weights(target_checkpoint_path)
+
         # Start new game
         luft.new_game()
 

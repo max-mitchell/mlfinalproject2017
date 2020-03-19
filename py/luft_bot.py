@@ -4,6 +4,8 @@ import struct
 
 import tensorflow as tf
 
+tf.config.set_visible_devices([], 'GPU')
+
 import h5py
 import os
 import random
@@ -24,33 +26,53 @@ class ConvNetModel(tf.keras.Model):
         self.hidden_layers = []
 
         self.conv1 = tf.keras.layers.Conv2D(filters=32, kernel_size=8,
-                            strides=4, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
-                            padding="valid", activation="relu", use_bias=False)
+            strides=4, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
+            padding="valid", activation="relu", use_bias=False)
 
         self.conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=4,
-                            strides=2, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
-                            padding="valid", activation="relu", use_bias=False)
+            strides=2, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
+            padding="valid", activation="relu", use_bias=False)
 
         self.conv3 = tf.keras.layers.Conv2D(filters=64, kernel_size=3,
-                            strides=1, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
-                            padding="valid", activation="relu", use_bias=False)
+            strides=1, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
+            padding="valid", activation="relu", use_bias=False)
         
         self.conv4 = tf.keras.layers.Conv2D(filters=hidden, kernel_size=7,
-                            strides=1, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
-                            padding="valid", activation="relu", use_bias=False)
+            strides=1, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2),
+            padding="valid", activation="relu", use_bias=False)
 
-        self.output_layer = tf.keras.layers.Dense(
+        self.valuestream = tf.keras.layers.Flatten()
+
+        self.advantagestream = tf.keras.layers.Flatten()
+
+        self.advantage = tf.keras.layers.Dense(
             num_actions, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2.0))
+
+        self.value = tf.keras.layers.Dense(
+            1, kernel_initializer=tf.keras.initializers.VarianceScaling(scale=2.0))
+
         
     @tf.function
     def call(self, inputs):
+        # Run inputs through the network
         z = self.input_layer(inputs)
         z = self.conv1(z)
         z = self.conv2(z)
         z = self.conv3(z)
         z = self.conv4(z)
-        output = self.output_layer(z)
-        return output
+
+        # Make advantage and value streams
+        valuestream, advantagestream = tf.split(z, 2, 3)
+        # Flatten both streams
+        valuestream = self.valuestream(valuestream)
+        advantagestream = self.advantagestream(advantagestream)
+
+        # Make value and sdvantage
+        value = self.value(valuestream)
+        advantage = self.advantage(advantagestream)
+
+        # Combine value and advantage, and return
+        return value + tf.subtract(advantage, tf.reduce_mean(advantage, axis=1, keepdims=True))
 
 
 class GameLearner(object):
@@ -80,6 +102,10 @@ class GameLearner(object):
         self.score_avg = dtable["avg"]
         # Current location in dtable
         self.dtable_spot = self.initial_state.attrs["dspot"]
+        # Current game number
+        self.game_number = dtable["avg"].attrs["game_num"]
+        # Set dtable avg object
+        self.dtable_avg = dtable["avg"]
 
     # Get q value from model
     def predict(self, inputs):
@@ -98,8 +124,9 @@ class GameLearner(object):
         rewards = np.asarray([self.reward[i] for i in events_list])
         states_next = np.asarray([self.next_state[i] for i in events_list])
 
-        # Get q value from model
-        value_next = np.max(TargetNet.predict(states_next), axis=1)
+        # Get q values from the Target network to compare
+        # with the train network
+        value_next = tf.reduce_max(TargetNet.predict(states_next), axis=1)
         # Compute actual predicted reward
         actual_values = rewards + self.gamma * value_next
 
@@ -138,6 +165,14 @@ class GameLearner(object):
         variables2 = TrainNet.model.trainable_variables
         for v1, v2 in zip(variables1, variables2):
             v1.assign(v2.numpy())
+
+    # Set dtable spot back a few every new game
+    # to account for the events grabbed after death
+    def new_game(self):
+        self.dtable_spot = (self.dtable_spot - 5) % self.max_experiences
+        self.initial_state.attrs["dspot"] = self.dtable_spot
+        self.game_number += 1
+        self.dtable_avg.attrs["game_num"] = self.game_number
 
 # Class for storing important game data
 class Luftrauser(object):
@@ -199,8 +234,8 @@ class Luftrauser(object):
     # Write new hdf5 file
     def make_new_dtable(self, length, h, w):
         H5FILE = h5py.File("data/d_table.hdf5", "w-")
-        H5FILE.create_dataset("dtable/sinit", (length, h, w, 4), dtype="i8", chunks=True, compression="lzf", shuffle=True)
-        H5FILE.create_dataset("dtable/snext", (length, h, w, 4), dtype="i8", chunks=True, compression="lzf", shuffle=True)
+        H5FILE.create_dataset("dtable/sinit", (length, h, w, 4), dtype="f8", chunks=True, compression="lzf", shuffle=True)
+        H5FILE.create_dataset("dtable/snext", (length, h, w, 4), dtype="f8", chunks=True, compression="lzf", shuffle=True)
         H5FILE.create_dataset("dtable/r", (length,), dtype="i", chunks=True, compression="lzf", shuffle=True)
         H5FILE.create_dataset("dtable/a", (length,), dtype="i", chunks=True, compression="lzf", shuffle=True)
         H5FILE.create_dataset("avg", (length,), dtype="i", chunks=True, compression="lzf", shuffle=True)
@@ -209,7 +244,7 @@ class Luftrauser(object):
         raise SystemExit
 
     def restructure_image(self, arr, frames):
-        return np.dstack([np.reshape(arr[i], (self.img_h_small, self.img_w_small)) for i in range(frames)])
+        return np.dstack([np.reshape(arr[i], (self.img_h_small, self.img_w_small)) for i in range(frames)]) / 255
 
     # Grabes frames number of frames of the game screen
     def get_frames(self, frames):
@@ -311,9 +346,9 @@ class Luftrauser(object):
 
 def main():
     # Set up variables
-    luft = Luftrauser(h5py_init=False)
+    luft = Luftrauser(h5py_init=False, game_speed=0.3, wait_btwn_frames=0.06)
     gamma = 0.99
-    weight_copy_interval = 25
+    weight_copy_interval = 100
     num_frames = 4
     state_shape = [luft.img_h_small, luft.img_w_small, num_frames]
     num_actions = len(luft.key_code)
@@ -321,9 +356,11 @@ def main():
     max_experiences = luft.dtable_length
     min_experiences = 30000
     prev_events_num = 8
-    learning_rate = 0.001
+    learning_rate = 0.00001
 
     load_model = True
+
+    games_to_average = 10
 
     # Create file logger to track results
     current_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -353,41 +390,61 @@ def main():
     N = 50000
     total_rewards = np.empty(N)
 
+    TrainNet.game_number = 300
+
     # Set up epsilon for moving from random moves
     # to predicted moves
-    epsilon = 0.99
-    decay = 0.9999
-    min_epsilon = 0.1
+    epsilon_initial = 1.0
+    epsilon_final = 0.1
+
+    # For seeing how the network is actually doing
+    epsilon_eval = 0.0
+    do_evaluation = False
+
+    # Set epsilon function
+    epsilon_decay_start = 50000
+    epsilon_decay_end = 1000000
+    epsilon_slope = -(epsilon_initial - epsilon_final) / epsilon_decay_end
+    epsilon_intercept = epsilon_initial - epsilon_slope * epsilon_decay_start
 
     # Start first game
     luft.first_game()
 
     # Play games
-    for n in range(N):
+    while TrainNet.game_number < N:
         # Find new epsilon
-        epsilon = max(min_epsilon, epsilon * decay)
+        if not do_evaluation:
+            if TrainNet.dtable_spot > epsilon_decay_start:
+                epsilon = max(epsilon_final, epsilon_slope * TrainNet.dtable_spot + epsilon_intercept)
+            else:
+                epsilon = epsilon_initial
+        else:
+            epsilon = epsilon_eval
+
         # Play one game
         total_reward = luft.play_luft(TrainNet, TargetNet, epsilon, weight_copy_interval, num_frames)
         # Add game score to score list
-        total_rewards[n] = total_reward
+        total_rewards[TrainNet.game_number] = total_reward
         # Find avg
-        avg_rewards = total_rewards[max(0, n - 5):(n + 1)].mean()
+        avg_rewards = total_rewards[max(0, TrainNet.game_number - games_to_average):(TrainNet.game_number + 1)].mean()
 
         # Write to log
         with summary_writer.as_default():
-            tf.summary.scalar('episode reward', total_reward, step=n)
-            tf.summary.scalar('running avg reward(5)', avg_rewards, step=n)
+            tf.summary.scalar('episode reward', total_reward, step=TrainNet.game_number)
+            tf.summary.scalar('running avg reward(' + str(games_to_average) + ')', avg_rewards, step=TrainNet.game_number)
 
         # Print every once in a while
-        if n % 10 == 0:
-            print("eppisode:", n, "eppisode reward:", total_reward, "eps:", epsilon, "avg reward (last 5):", avg_rewards)
-        
+        if TrainNet.game_number % 10 == 0:
+            print("eppisode:", TrainNet.game_number, "eppisode reward:", total_reward, "eps:", epsilon, 
+                "avg reward last " + str(games_to_average) + ":", avg_rewards, "dtable spot:", TrainNet.dtable_spot)
+
         # Save weights
         TrainNet.model.save_weights(train_checkpoint_path)
         TargetNet.model.save_weights(target_checkpoint_path)
 
         # Start new game
         luft.new_game()
+        TrainNet.new_game()
 
     luft.close()
 

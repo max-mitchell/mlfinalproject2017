@@ -25,7 +25,7 @@ def getImgData(frames): #gets pixel data from luft_util
 		if IS_DEAD:
 			return 0
 		if i < frames - 1:
-			time.sleep(0.036)
+			time.sleep(0.06)
 	return image_return
 
 

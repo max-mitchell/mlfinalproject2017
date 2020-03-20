@@ -13,6 +13,8 @@ import time
 import datetime
 import sys
 
+import psutil
+
 
 # from https://towardsdatascience.com/deep-reinforcement-learning-build-a-deep-q-network-dqn-to-play-cartpole-with-tensorflow-2-and-gym-8e105744b998
 # and https://nbviewer.jupyter.org/github/fg91/Deep-Q-Learning/blob/master/DQN.ipynb
@@ -177,8 +179,12 @@ class GameLearner(object):
 # Class for storing important game data
 class Luftrauser(object):
     # Init
-    def __init__(self, shrink_val=2, dead_val=81, game_speed=1, wait_btwn_frames=0.028,
-                    h5py_init=False, dtable_length=1500000):
+    def __init__(self, luft_process, shrink_val=2, dead_val=81, game_speed=1, 
+                wait_btwn_frames=0.028, h5py_init=False, dtable_length=1500000):
+
+        # Game process
+        self.luft_process = luft_process
+
         # Image is shrunk by this factor
         self.shrink_val = shrink_val
         # Screen goes this color on player death
@@ -280,6 +286,11 @@ class Luftrauser(object):
         self.luft_util.sendKey(6)
         time.sleep(.2 * self.game_speed_mult)
 
+    # Resets keys
+    def reset_keys(self):
+        for i in range(4, 8):
+            self.luft_util.sendKey(i)
+
     # Resets keys and starts new game with UP UP
     def new_game(self):
         for i in range(4, 8):
@@ -309,12 +320,19 @@ class Luftrauser(object):
         # Grab init screen
         frames_next = self.get_frames(num_frames)
 
+        # Pause the game
+        self.luft_process.suspend()
+
         # Play through one game
         while not self.is_dead:
+
             # Get action to perform
             action = TrainNet.get_action([frames_next], epsilon)
             # Copy old new frames to new old frames
             frames_initial = frames_next
+
+            # Resume the game
+            self.luft_process.resume()
 
             # Make sure action is different than last time
             if action != last_action:
@@ -330,23 +348,35 @@ class Luftrauser(object):
             reward = self.get_score() - prev_score
             prev_score = reward
 
-            #if self.is_dead:
-            #    # Remove the last few events
-            #    continue
+            # Pause the game
+            self.luft_process.suspend()
+
+            # Add event and train
             TrainNet.add_experience(frames_initial, reward, action, frames_next)
             TrainNet.train(TargetNet)
             loop_iter += 1
             if loop_iter % weight_copy_interval == 0:
                 TargetNet.copy_weights(TrainNet)
 
+        self.reset_keys()
         return reward
 
 
 
 
 def main():
+    # Read PID 
+    try:
+        luft_pid = int(sys.argv[1], 0)
+    except Exception as e:
+        print("Invalid PID")
+        exit(1)    
+
+    # Grab luft process
+    luft_process = psutil.Process(luft_pid)
+
     # Set up variables
-    luft = Luftrauser(h5py_init=False, game_speed=0.3, wait_btwn_frames=0.06)
+    luft = Luftrauser(luft_process)
     gamma = 0.99
     weight_copy_interval = 100
     num_frames = 4
@@ -390,7 +420,7 @@ def main():
     N = 50000
     total_rewards = np.empty(N)
 
-    TrainNet.game_number = 300
+    # TrainNet.game_number = 300
 
     # Set up epsilon for moving from random moves
     # to predicted moves

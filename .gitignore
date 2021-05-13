@@ -13,3 +13,4 @@ env2/
 .venv/
 
 log/
+.vscode/

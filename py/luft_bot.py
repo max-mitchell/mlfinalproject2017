@@ -1,5 +1,5 @@
 from ctypes import *
-import numpy as np #I'll refer to numpy as np and tensorflow as tf
+import numpy as np
 import struct
 
 import tensorflow as tf
